@@ -1,6 +1,7 @@
 use crate::enums::ProbeType;
 use crate::probes::icmp::IcmpBuilder;
-use crate::probes::tcp::TcpBuilder;
+use crate::probes::icmpv6::Icmpv6Builder;
+use crate::probes::tcp::{TcpBuilder};
 use crate::probes::udp::UdpBuilder;
 use crate::probes::probe::Probe;
 
@@ -13,6 +14,7 @@ impl ProbeFactory {
            ProbeType::Icmp => Box::new(IcmpBuilder::new().build()),
            ProbeType::Tcp => Box::new(TcpBuilder::new().build()),
            ProbeType::Udp => Box::new(UdpBuilder::new().build()),
+           ProbeType::Icmpv6 => Box::new(Icmpv6Builder::new().build()),
        }
    }
 }

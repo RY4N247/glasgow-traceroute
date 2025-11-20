@@ -30,7 +30,7 @@ impl Probe for Udp {
         todo!()
     }
 
-    fn summary(&self) {
+    fn validate_response(&self) -> bool{
         todo!()
     }
 }

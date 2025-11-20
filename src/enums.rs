@@ -7,14 +7,13 @@ pub enum Tool {
     Ping,
     Traceroute
 }
-
 #[derive(ValueEnum, Clone, Debug)]
 pub enum ProbeType {
     Icmp,
+    Icmpv6,
     Tcp,
     Udp
 }
-
 #[derive(ValueEnum, Clone, Debug)]
 pub enum IpVersion {
     V4,
@@ -35,8 +34,6 @@ pub enum IcmpType {
     Timestamp = 13,
     TimestampReply = 14,
 }
-
-
 // ------------------------------------
 //              TCP Types
 // ------------------------------------

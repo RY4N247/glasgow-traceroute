@@ -7,6 +7,6 @@ pub trait Probe {
     fn get_socket_config(&self) -> SocketConfig;
     fn send(&mut self, socket: &Socket);
     fn receive(&self, socket: &Socket);
-    fn summary(&self);
+    fn validate_response(&self) -> bool;
 
 }

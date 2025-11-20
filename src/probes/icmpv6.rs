@@ -1,18 +1,18 @@
-// Tcp concrete class and builder
+// Icmpv6 concrete class and builder
 
 use socket2::Socket;
 use crate::network::socket_config::SocketConfig;
 use crate::probes::probe::Probe;
 
-pub struct Tcp {
+pub struct Icmpv6 {
 
 }
 
-impl Tcp {
+impl Icmpv6 {
 
 }
 
-impl Probe for Tcp {
+impl Probe for Icmpv6 {
     fn to_byte_array(&self) -> Vec<u8> {
         todo!()
     }
@@ -35,19 +35,19 @@ impl Probe for Tcp {
     }
 }
 
-pub struct TcpBuilder {
+pub struct Icmpv6Builder {
 
 }
 
-impl TcpBuilder {
+impl Icmpv6Builder {
     pub fn new() -> Self {
-        TcpBuilder {
+        Icmpv6Builder {
 
         }
     }
 
-    pub fn build(&self) -> Tcp {
-        Tcp {
+    pub fn build(&self) -> Icmpv6 {
+        Icmpv6 {
 
         }
     }

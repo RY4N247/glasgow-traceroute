@@ -1,5 +1,6 @@
-// icmp concrete class and builder
-
+//! ICMP Probe Implementation
+//!
+//! This module defines the ICMP probe and its builder, implementing the Probe trait.
 use std::net::{Ipv4Addr, SocketAddr};
 use socket2::*;
 use crate::probes::probe::Probe;
@@ -9,12 +10,19 @@ use crate::network::socket_config::SocketConfig;
 use std::mem::MaybeUninit;
 
 pub struct Icmp {
+    /// ICMP Type (e.g., Echo Request, Echo Reply)
     pub icmp_type: u8,
+    ///Provides further detail about the type, e.g., the reason for a Destination Unreachable.
     pub code: u8,
-    pub checksum: u16,  //one’s-complement sum of all 16-bit words in the ICMP message
+    /// Checksum (one’s-complement sum of all 16-bit words in the ICMP message)
+    pub checksum: u16,
+    /// Identifier (used to match requests and replies)
     pub identifier: u16,
+    /// Sequence Number (used to match requests and replies)
     pub sequence: u16,
+    /// Payload (data carried by the ICMP message)
     pub payload: Vec<u8>,
+    /// Destination IP address
     pub destination: Ipv4Addr,
 }
 
@@ -69,7 +77,23 @@ impl Probe for Icmp {
                 println!("Received {} bytes from {:?}", n, addr);
                 println!("Packet bytes: {:?}", packet);
 
-                //TODO: parse ICMP response and validate
+                // Create an Icmp instance from the received packet for further processing
+                let received_icmp_bytes = &packet[20..28];
+
+                let response = IcmpBuilder::new()
+                    .icmp_type(received_icmp_bytes[0])
+                    .code(received_icmp_bytes[1])
+                    .checksum(u16::from_be_bytes([received_icmp_bytes[2], received_icmp_bytes[3]]))
+                    .identifier(u16::from_be_bytes([received_icmp_bytes[4], received_icmp_bytes[5]]))
+                    .sequence(u16::from_be_bytes([received_icmp_bytes[6], received_icmp_bytes[7]]))
+                    .payload(packet[28..n].to_vec())
+                    .build();
+
+                if response.validate_response() {
+
+                } else {
+
+                }
 
             }
             Err(e) => {
@@ -78,9 +102,8 @@ impl Probe for Icmp {
         }
     }
 
-
-    fn summary(&self) {
-        todo!()
+    fn validate_response(&self) -> bool {
+        true
     }
 }
 
