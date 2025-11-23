@@ -1,12 +1,12 @@
+//! Enumerations for configurations and options
 use clap::ValueEnum;
-// ------------------------------------
-//         Common Enums
-// ------------------------------------
+/// Supported tools
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Tool {
     Ping,
     Traceroute
 }
+/// Supported probe types
 #[derive(ValueEnum, Clone, Debug)]
 pub enum ProbeType {
     Icmp,
@@ -14,14 +14,13 @@ pub enum ProbeType {
     Tcp,
     Udp
 }
+/// IP versions
 #[derive(ValueEnum, Clone, Debug)]
 pub enum IpVersion {
     V4,
     V6
 }
-// ------------------------------------
-//              ICMP Types
-// ------------------------------------
+/// ICMP types
 pub enum IcmpType {
     EchoReply = 0,
     DestinationUnreachable = 3,
@@ -34,12 +33,3 @@ pub enum IcmpType {
     Timestamp = 13,
     TimestampReply = 14,
 }
-// ------------------------------------
-//              TCP Types
-// ------------------------------------
-
-
-// ------------------------------------
-//              UDP Types
-// ------------------------------------
-

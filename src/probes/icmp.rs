@@ -1,14 +1,17 @@
 //! ICMP Probe Implementation
 //!
 //! This module defines the ICMP probe and its builder, implementing the Probe trait.
+
 use std::net::{Ipv4Addr, SocketAddr};
 use socket2::*;
 use crate::probes::probe::Probe;
-use crate::enums::IcmpType::EchoRequest;
+use crate::enums::IcmpType::{EchoReply, EchoRequest};
 use packet::icmp::checksum;
 use crate::network::socket_config::SocketConfig;
 use std::mem::MaybeUninit;
 
+/// ICMP Probe Structure
+/// as defined in RFC 792 plus additional fields for payload and destination
 pub struct Icmp {
     /// ICMP Type (e.g., Echo Request, Echo Reply)
     pub icmp_type: u8,
@@ -47,7 +50,6 @@ impl Probe for Icmp {
 
         buf
     }
-
     fn get_socket_config(&self) -> SocketConfig {
         SocketConfig {
             domain: Domain::IPV4,
@@ -57,25 +59,24 @@ impl Probe for Icmp {
     }
 
     fn send(&mut self, socket : &Socket) {
-        println!("Sending ICMP packet to {}", self.destination);
         let addr = SocketAddr::from((self.destination, 0));
         let packet = self.to_byte_array();
-        println!("Packet bytes: {:?}", packet);
         socket.send_to(&packet, &addr.into()).unwrap();
         self.sequence = self.sequence.wrapping_add(1);
     }
-    fn receive(&self, socket: &Socket) {
-        println!("Receiving ICMP packet...");
+
+    fn receive(&self, socket: &Socket)-> bool {
 
         let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
 
         match socket.recv_from(&mut buf) {
-            Ok((n, addr)) => {
+            Ok((n, _addr)) => {
                 let packet: &[u8] = unsafe {
                     std::slice::from_raw_parts(buf.as_ptr() as *const u8, n)
                 };
-                println!("Received {} bytes from {:?}", n, addr);
-                println!("Packet bytes: {:?}", packet);
+                // n = total packet size (IP + ICMP)
+                let icmp_len = n - 20; // subtract IP header
+                print!("{} bytes from {}", icmp_len, self.destination);
 
                 // Create an Icmp instance from the received packet for further processing
                 let received_icmp_bytes = &packet[20..28];
@@ -89,24 +90,31 @@ impl Probe for Icmp {
                     .payload(packet[28..n].to_vec())
                     .build();
 
-                if response.validate_response() {
-
+                if response.icmp_type == EchoReply as u8{
+                    println!("\x1b[32m ✓ \x1b[0m");
+                    println!("  └── icmp_seq={} ",self.sequence);
+                    true
                 } else {
-
+                    println!("\x1b[31m ✗ \x1b[0m");
+                    println!("  └── icmp_seq={} ",self.sequence);
+                    false
                 }
-
             }
             Err(e) => {
-                eprintln!("recv_from failed: {}", e);
+                print!("recv_from failed: {}", e);
+                println!("\x1b[31m ✗ \x1b[0m");
+                false
             }
         }
     }
-
-    fn validate_response(&self) -> bool {
-        true
+    /// Sets the destination IP address from a string
+    /// validated in main
+    fn set_destination(&mut self, destination: String) {
+        self.destination = destination.parse().unwrap();
     }
 }
 
+/// Builder for ICMP Probe
 #[derive(Debug)]
 pub struct IcmpBuilder {
     icmp_type:u8,
@@ -119,6 +127,16 @@ pub struct IcmpBuilder {
 }
 
 impl IcmpBuilder {
+    /// Creates a new IcmpBuilder with default values
+    /// #Examples
+    /// ```
+    /// let icmp_probe = IcmpBuilder::new()
+    ///    .identifier(1234)
+    ///   .payload(vec![1,2,3,4])
+    ///  .destination(Ipv4Addr::new(1,1,1,1))
+    /// .build();
+    /// ```
+    ///
     pub fn new() -> Self {
         IcmpBuilder {
             icmp_type: EchoRequest as u8,
@@ -126,38 +144,46 @@ impl IcmpBuilder {
             checksum: 0,
             identifier: std::process::id() as u16,
             sequence: 0,
-            payload: Vec::new(),
+            payload: vec![0u8; 56],
             destination: Ipv4Addr::new(8,8,8,8), // default to Google DNS
         }
     }
+    /// Sets the ICMP type
     pub fn icmp_type(mut self, icmp_type: u8) -> Self {
         self.icmp_type = icmp_type;
         self
     }
+        /// Sets the ICMP code
     pub fn code(mut self, code: u8) -> Self {
         self.code = code;
         self
     }
+        /// Sets the ICMP checksum
     pub fn checksum(mut self, checksum: u16) -> Self {
         self.checksum = checksum;
         self
     }
+        /// Sets the ICMP identifier
     pub fn identifier(mut self, identifier: u16) -> Self {
         self.identifier = identifier;
         self
     }
+        /// Sets the ICMP sequence number
     pub fn sequence(mut self, sequence: u16) -> Self {
         self.sequence = sequence;
         self
     }
+        /// Sets the ICMP payload
     pub fn payload(mut self, payload: Vec<u8>) -> Self {
         self.payload = payload;
         self
     }
+        /// Sets the destination IP address
     pub fn destination(mut self, destination: Ipv4Addr) -> Self {
         self.destination = destination;
         self
     }
+    /// Builds the ICMP probe
     pub fn build(self) -> Icmp {
         Icmp {
             icmp_type: self.icmp_type,
@@ -169,5 +195,4 @@ impl IcmpBuilder {
             destination: self.destination,
         }
     }
-
 }

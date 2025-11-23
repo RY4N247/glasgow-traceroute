@@ -21,18 +21,15 @@ impl Probe for Tcp {
         todo!()
     }
 
-
     fn send(&mut self, socket: &Socket) {
         todo!()
     }
 
-    fn receive(&self, socket: &Socket) {
+    fn receive(&self, socket: &Socket) -> bool {
         todo!()
     }
 
-    fn validate_response(&self) -> bool {
-        todo!()
-    }
+  
 }
 
 pub struct TcpBuilder {
