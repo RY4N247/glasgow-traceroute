@@ -2,7 +2,7 @@
 use crate::enums::{IcmpCode, IcmpType};
 use packet::icmp::checksum;
 use crate::headers::transport_header::TransportHeader;
-
+#[derive(Debug)]
 pub struct IcmpHeader {
     pub icmp_type:IcmpType,
     pub code: IcmpCode,

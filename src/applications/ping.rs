@@ -44,12 +44,13 @@ impl Ping{
            }
         }
         let user_local_ip:Ipv4Addr = local_ip().unwrap().to_string().parse().expect("Invalid Ip address");
-        println!("user ip {}", user_local_ip);
+        // println!("user ip {}", user_local_ip);
         let ipv4_header = Ipv4HeaderBuilder::new()
             .source_address(user_local_ip)
             .destination_address(destination)
             .protocol(ip_protocol)
             .build();
+
 
         let socket = Socket::new(Domain::IPV4, Type::RAW, socket_protocol).expect("Failed to create socket");
         socket.set_header_included_v4(true).expect("Failed to set header included");
@@ -68,19 +69,8 @@ impl Ping{
     pub fn send_ping(&mut self) {
         let payload: Vec<u8> = vec![0u8; self.payload_size];
         let transport_bytes = self.transport_header.to_byte_array(&payload);
-        println!("Transport Bytes: {:?}",transport_bytes);
-        println!("Transport Bytes Length {:?}", transport_bytes.len());
-
-        self.ipv4_header.set_total_length_from_payload(transport_bytes.len());
-        println!("ipv4 header length {}", self.ipv4_header.total_length);
-
-
-        let mut bytes = self.ipv4_header.to_byte_array();
-
-        bytes.extend_from_slice(&transport_bytes);
-        println!("sending: {:?}",bytes.len());
-        println!("is header included?{:?}",self.socket.header_included_v4());
-
+        
+        let bytes = self.ipv4_header.build_packet(&transport_bytes);
 
         let sockaddr = SocketAddr::from((self.destination, 0));
         self.socket
@@ -94,9 +84,20 @@ impl Ping{
                     std::slice::from_raw_parts(buf.as_ptr() as *const u8, n)
                 };
                 // n = total packet size (IP + ICMP)
-                let icmp_len = n - 20; // subtract IP header
-                println!("{} bytes from {}", icmp_len, self.destination);
-
+                println!("{} bytes from {}", n, self.destination);
+                
+                // Print raw bytes
+                println!("Raw packet ({} bytes): {:?}", n, packet);
+                
+                // Print IP header (first 20 bytes)
+                if n >= 20 {
+                    println!("IP Header:  {:?}", &packet[..20]);
+                }
+                
+                // Print ICMP data (remaining bytes)
+                if n > 20 {
+                    println!("ICMP Data:  {:?}", &packet[20..]);
+                }
             }
             Err(e) => {
                 print!("recv_from failed: {}", e);

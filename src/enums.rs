@@ -119,14 +119,14 @@ impl IpProtocol {
 pub enum IpFlags {
     Reserved = 0,
     DontFragment = 2,
-    MoreFragments = 4,
+    MoreFragments = 1,
 }
 impl IpFlags {
     pub fn to_u8(&self) -> u8 {
         match self {
             IpFlags::Reserved => 0,
             IpFlags::DontFragment => 2,
-            IpFlags::MoreFragments => 4,
+            IpFlags::MoreFragments => 1,
         }
     }
 }
