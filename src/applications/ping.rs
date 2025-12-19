@@ -7,6 +7,8 @@ use crate::headers::udp_header::UdpHeaderBuilder;
 use socket2::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use local_ip_address::local_ip;
+use std::time::{Duration, Instant};
+
 pub struct Ping {
     destination: Ipv4Addr,
     timeout_ms: u64,
@@ -14,6 +16,14 @@ pub struct Ping {
     socket: Socket,
     ipv4_header: Ipv4Header,
     transport_header: Box<dyn TransportHeader>,
+}
+
+pub struct PingResult {
+    pub destination: Ipv4Addr,
+    pub bytes_sent: usize,
+    pub bytes_received: usize,
+    pub rtt: Option<Duration>,
+    pub raw_packet: Vec<u8>,
 }
 
 impl Ping{
@@ -44,7 +54,6 @@ impl Ping{
            }
         }
         let user_local_ip:Ipv4Addr = local_ip().unwrap().to_string().parse().expect("Invalid Ip address");
-        // println!("user ip {}", user_local_ip);
         let ipv4_header = Ipv4HeaderBuilder::new()
             .source_address(user_local_ip)
             .destination_address(destination)
@@ -66,45 +75,35 @@ impl Ping{
         }
     }
 
-    pub fn send_ping(&mut self) {
+    pub fn send_ping(&mut self) -> Result<PingResult, std::io::Error> {
         let payload: Vec<u8> = vec![0u8; self.payload_size];
         let transport_bytes = self.transport_header.to_byte_array(&payload);
-        
         let bytes = self.ipv4_header.build_packet(&transport_bytes);
 
         let sockaddr = SocketAddr::from((self.destination, 0));
-        self.socket
-            .send_to(&bytes, &sockaddr.into())
-            .expect("Failed to send ping");
+
+        let start = Instant::now();
+        let bytes_sent = self
+            .socket
+            .send_to(&bytes, &sockaddr.into())?;
 
         let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
         match self.socket.recv_from(&mut buf) {
             Ok((n, _addr)) => {
-                let packet: &[u8] = unsafe {
-                    std::slice::from_raw_parts(buf.as_ptr() as *const u8, n)
-                };
-                // n = total packet size (IP + ICMP)
-                println!("{} bytes from {}", n, self.destination);
-                
-                // Print raw bytes
-                println!("Raw packet ({} bytes): {:?}", n, packet);
-                
-                // Print IP header (first 20 bytes)
-                if n >= 20 {
-                    println!("IP Header:  {:?}", &packet[..20]);
-                }
-                
-                // Print ICMP data (remaining bytes)
-                if n > 20 {
-                    println!("ICMP Data:  {:?}", &packet[20..]);
-                }
+                let rtt = start.elapsed();
+                let packet: &[u8] = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
+                let raw_packet = packet.to_vec();
+
+                // Build the result and return it for the caller to inspect/parse
+                Ok(PingResult {
+                    destination: self.destination,
+                    bytes_sent,
+                    bytes_received: n,
+                    rtt: Some(rtt),
+                    raw_packet,
+                })
             }
-            Err(e) => {
-                print!("recv_from failed: {}", e);
-                println!("\x1b[31m ✗ \x1b[0m");
-            }
+            Err(e) => Err(e),
         }
-
-
     }
 }

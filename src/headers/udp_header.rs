@@ -2,7 +2,7 @@
 //! https://www.geeksforgeeks.org/user-datagram-protocol-udp/
 
 use crate::headers::transport_header::TransportHeader;
-
+use packet::udp::checksum;
 pub struct UdpHeader {
     source_port: u16,
     destination_port: u16,
@@ -17,8 +17,9 @@ impl TransportHeader for UdpHeader {
         buf.extend_from_slice(&self.destination_port.to_be_bytes());
         let length = 8 + payload.len();
         buf.extend_from_slice(&(length as u16).to_be_bytes());
-        buf.extend_from_slice(&self.checksum.to_be_bytes());
         buf.extend_from_slice(payload);
+
+        // let checksum = checksum(&buf)
 
         buf
     }

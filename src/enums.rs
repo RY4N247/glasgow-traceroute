@@ -1,6 +1,21 @@
+use clap::ValueEnum;
+
 /// ICMP Types and Codes as per RFC 792
 /// https://tools.ietf.org/html/rfc792
 /// https://www.geeksforgeeks.org/computer-networks/types-of-icmp-internet-control-message-protocol-messages/
+///
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Tool {
+    Ping,
+    Traceroute
+}
+/// Supported probe types
+#[derive(ValueEnum, Clone, Debug)]
+pub enum ProbeType {
+    Icmp,
+    Tcp,
+    Udp
+}
 #[derive(Clone, Debug)]
 pub enum IcmpType {
     EchoReply = 0,
