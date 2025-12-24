@@ -1,0 +1,30 @@
+#cloud-config
+
+hostname: mininet-example
+timezone: Europe/London
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - git
+  - curl
+  - build-essential
+  - python3
+  - python3-pip
+  - pkg-config
+  - libssl-dev
+  - net-tools
+  - iproute2
+  - tcpdump
+  - openvswitch-switch
+
+runcmd:
+  # Rust
+  - su - ubuntu -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+  - echo 'source $HOME/.cargo/env' >> /home/ubuntu/.bashrc
+
+  # Mininet
+  - git clone https://github.com/mininet/mininet.git /opt/mininet
+  - /opt/mininet/util/install.sh -nfv
+
