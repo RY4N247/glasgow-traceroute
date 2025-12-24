@@ -10,7 +10,7 @@ pub enum Tool {
     Traceroute
 }
 /// Supported probe types
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Eq, PartialEq)]
 pub enum ProbeType {
     Icmp,
     Tcp,
@@ -113,7 +113,7 @@ pub enum ParameterProblemCode {
     MissingRequiredOption = 1,
     BadLength = 2,
 }
-
+// IP Enumerations
 #[derive(Debug)]
 pub enum IpProtocol {
     ICMP = 1,
@@ -145,7 +145,12 @@ impl IpFlags {
         }
     }
 }
+pub enum ByteOrderMode {
+    Network,
+    Auto,
+}
 
+/// Transport Layer Protocols
 pub enum TransportProtocol {
     ICMP,  // Although ICMP is not a transport layer protocol, it's included here for completeness
     TCP,

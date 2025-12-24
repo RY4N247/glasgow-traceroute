@@ -3,7 +3,7 @@
 use std::net::Ipv4Addr;
 use packet::ip::v4::checksum;
 use crate::enums::IpFlags::DontFragment;
-use crate::enums::{IpFlags, IpProtocol};
+use crate::enums::{ByteOrderMode, IpFlags, IpProtocol};
 use crate::enums::IpProtocol::ICMP;
 
 
@@ -26,11 +26,15 @@ pub struct Ipv4Header {
 }
 
 impl Ipv4Header {
-    pub fn build_packet(&mut self, payload: &[u8]) -> Vec<u8> {
+    pub fn build_packet(&mut self, payload: &[u8], mode: Option<ByteOrderMode>) -> Vec<u8> {
         self.set_total_length_from_payload(payload.len());
         self.set_new_id();
-        
-        let mut packet = self.to_byte_array();
+
+        let mut packet = match mode.unwrap_or(ByteOrderMode::Auto) {
+            ByteOrderMode::Network => self.to_byte_array_network(),
+            ByteOrderMode::Auto => self.to_byte_array(), // platform-aware
+        };
+
         packet.extend_from_slice(payload);
         packet
     }
@@ -45,9 +49,11 @@ impl Ipv4Header {
         buf.push((self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011));
 
         // ip_len is in host byte order as per man ip 4
-        // TODO: Implement correctly for other OS
         #[cfg(target_os = "macos")]
         buf.extend_from_slice(&self.total_length.to_ne_bytes());
+
+        #[cfg(target_os = "linux")]
+        buf.extend_from_slice(&self.total_length.to_be_bytes());
 
         buf.extend_from_slice(&self.identification.to_be_bytes());
 
@@ -56,9 +62,11 @@ impl Ipv4Header {
         let combined = flags_u16 | offset_u16;
 
         //ip_len is in host byte order as per man ip 4
-        // TODO: Implement correctly for other OS
         #[cfg(target_os = "macos")]
         buf.extend_from_slice(&combined.to_ne_bytes());
+
+        #[cfg(target_os = "linux")]
+        buf.extend_from_slice(&combined.to_be_bytes());
 
         buf.push(self.time_to_live);
 
@@ -77,7 +85,42 @@ impl Ipv4Header {
         buf[10] = (checksum >> 8) as u8;
         buf[11] = (checksum & 0xFF) as u8;
 
-        // println!("Ipv4 header {:?}",buf);
+        buf
+    }
+    pub fn to_byte_array_network(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::with_capacity(20);
+
+        buf.push((self.version << 4) | (self.internet_header_length & 0b00001111));
+
+        buf.push((self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011));
+
+        buf.extend_from_slice(&self.total_length.to_be_bytes());
+
+        buf.extend_from_slice(&self.identification.to_be_bytes());
+
+        let flags_u16 = (self.flags.to_u8() as u16) << 13;
+        let offset_u16 = self.fragment_offset & 0b0001_1111_1111_1111;
+        let combined = flags_u16 | offset_u16;
+
+        buf.extend_from_slice(&combined.to_be_bytes());
+
+        buf.push(self.time_to_live);
+
+        buf.push(self.protocol.to_u8());
+
+        buf.extend_from_slice(&[0,0]);
+
+        buf.extend_from_slice(&self.source_address.octets());
+
+        buf.extend_from_slice(&self.destination_address.octets());
+
+        //compute checksum and
+        let checksum = checksum(&buf[..20]);
+
+        // Insert checksum into bytes 10 and 11
+        buf[10] = (checksum >> 8) as u8;
+        buf[11] = (checksum & 0xFF) as u8;
+
         buf
     }
     pub fn set_total_length_from_payload(&mut self, payload_length: usize) {
@@ -157,6 +200,46 @@ impl Ipv4HeaderBuilder {
             source_address: self.source_address,
             destination_address: self.destination_address
         }
+    }
+
+    pub fn version(&self) -> u8 {
+        self.version
+    }
+
+    pub fn internet_header_length(&self) -> u8 {
+        self.internet_header_length
+    }
+
+    pub fn type_of_service(&self) -> u8 {
+        self.type_of_service
+    }
+
+    pub fn explicit_congestion_notification(&self) -> u8 {
+        self.explicit_congestion_notification
+    }
+
+    pub fn total_length(&self) -> u16 {
+        self.total_length
+    }
+
+    pub fn identification(&self) -> u16 {
+        self.identification
+    }
+
+    pub fn flags(&self) -> &IpFlags {
+        &self.flags
+    }
+
+    pub fn fragment_offset(&self) -> u16 {
+        self.fragment_offset
+    }
+
+    pub fn time_to_live(&self) -> u8 {
+        self.time_to_live
+    }
+
+    pub fn header_checksum(&self) -> u16 {
+        self.header_checksum
     }
 }
 

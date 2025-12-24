@@ -6,10 +6,8 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use std::{thread};
-
 use clap::Parser;
 use ctrlc;
-
 use glasgow_traceroute::applications::ping::Ping;
 use glasgow_traceroute::enums::{Tool, ProbeType, TransportProtocol};
 
@@ -78,7 +76,7 @@ fn main() {
             let timeout_ms = 1000;
             let payload_size = 36;
 
-            let mut ping = Ping::new(transport, dest, timeout_ms, payload_size);
+            let mut ping = Ping::new(transport, dest, timeout_ms, payload_size, args.port);
 
             let mut packets_sent: u64 = 0;
             let mut packets_received: u64 = 0;
@@ -86,19 +84,28 @@ fn main() {
 
             while running.load(Ordering::SeqCst) {
                 packets_sent += 1;
-                let start = Instant::now();
-
                 match ping.send_ping() {
                     Ok(res) => {
                         let rtt_ms = res
                             .rtt
                             .map(|d| d.as_secs_f64() * 1000.0)
-                            .unwrap_or_else(|| start.elapsed().as_secs_f64() * 1000.0);
+                            .unwrap();
 
-                        println!(
-                            "{} bytes from {}: time={:.3} ms",
-                            res.bytes_received, res.destination, rtt_ms
-                        );
+                        if args.probe_type == ProbeType::Icmp {
+                            println!(
+                                "ICMP {} bytes from {}: time={:.3} ms",
+                                res.bytes_received,
+                                res.destination,
+                                rtt_ms
+                            );
+                        } else if args.probe_type == ProbeType::Udp {
+                            println!(
+                                "UDP reply from {}: time={:.3} ms",
+                                res.destination,
+                                rtt_ms
+                            );
+                        }
+
 
                         packets_received += 1;
                         rtts_ms.push(rtt_ms);

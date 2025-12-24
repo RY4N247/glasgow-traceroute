@@ -8,6 +8,7 @@ use socket2::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use local_ip_address::local_ip;
 use std::time::{Duration, Instant};
+use rand::Rng;
 
 pub struct Ping {
     destination: Ipv4Addr,
@@ -27,7 +28,7 @@ pub struct PingResult {
 }
 
 impl Ping{
-    pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize) -> Self {
+    pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, port: Option<u16>) -> Self {
         let socket_protocol;
         let ip_protocol;
         let transport_header: Box<dyn TransportHeader>;
@@ -41,11 +42,13 @@ impl Ping{
 
            }
            TransportProtocol::UDP => {
-               socket_protocol = Some(Protocol::UDP);
+               socket_protocol = Some(Protocol::ICMPV4);
                ip_protocol = crate::enums::IpProtocol::UDP;
+               let dest_port = port.unwrap_or(33434);
+               let src_port = rand::rng().random_range(49152..65535);
                transport_header = Box::new(UdpHeaderBuilder::new()
-                   .source_port(34254)
-                   .destination_port(34254)
+                   .source_port(src_port)
+                   .destination_port(dest_port)
                    .build()
                );
            }
@@ -63,7 +66,7 @@ impl Ping{
 
         let socket = Socket::new(Domain::IPV4, Type::RAW, socket_protocol).expect("Failed to create socket");
         socket.set_header_included_v4(true).expect("Failed to set header included");
-        socket.set_read_timeout(Some(std::time::Duration::from_millis(timeout_ms))).expect("Failed to set read timeout");
+        socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).expect("Failed to set read timeout");
 
         Self {
             destination,
@@ -77,8 +80,17 @@ impl Ping{
 
     pub fn send_ping(&mut self) -> Result<PingResult, std::io::Error> {
         let payload: Vec<u8> = vec![0u8; self.payload_size];
-        let transport_bytes = self.transport_header.to_byte_array(&payload);
-        let bytes = self.ipv4_header.build_packet(&transport_bytes);
+        let mut transport_bytes = self.transport_header.to_byte_array(&payload);
+
+        let socket_packet = self.ipv4_header.build_packet(&transport_bytes, None);
+        
+        let mut parser_packet = self.ipv4_header.build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
+
+        let temp_ip_packet = packet::ip::Packet::new(parser_packet.as_slice()).unwrap();
+
+        self.transport_header.apply_ip_context(&temp_ip_packet, &mut transport_bytes);
+
+        let bytes = self.ipv4_header.build_packet(&transport_bytes, None);
 
         let sockaddr = SocketAddr::from((self.destination, 0));
 

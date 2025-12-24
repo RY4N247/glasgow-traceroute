@@ -1,8 +1,11 @@
 //! UDP Header Structure
 //! https://www.geeksforgeeks.org/user-datagram-protocol-udp/
 
+use packet::ip::Packet;
 use crate::headers::transport_header::TransportHeader;
 use packet::udp::checksum;
+use crate::headers::ipv4_header::Ipv4Header;
+
 pub struct UdpHeader {
     source_port: u16,
     destination_port: u16,
@@ -17,11 +20,14 @@ impl TransportHeader for UdpHeader {
         buf.extend_from_slice(&self.destination_port.to_be_bytes());
         let length = 8 + payload.len();
         buf.extend_from_slice(&(length as u16).to_be_bytes());
+        buf.extend_from_slice(&0u16.to_be_bytes());
         buf.extend_from_slice(payload);
 
-        // let checksum = checksum(&buf)
-
         buf
+    }
+    fn apply_ip_context(&self, ip_packet: &packet::ip::Packet<&[u8]>, transport_bytes: &mut [u8]) {
+        let checksum = packet::udp::checksum(ip_packet, transport_bytes);
+        transport_bytes[6..8].copy_from_slice(&checksum.to_be_bytes());
     }
 }
 pub struct UdpHeaderBuilder {
