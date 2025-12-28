@@ -18,6 +18,30 @@ packages:
   - iproute2
   - tcpdump
   - openvswitch-switch
+  - traceroute
+  # FRR build dependencies
+  - autoconf
+  - automake
+  - libtool
+  - libreadline-dev
+  - texinfo
+  - libpam0g-dev
+  - libjson-c-dev
+  - bison
+  - flex
+  - libc-ares-dev
+  - python3-dev
+  - python3-sphinx
+  - install-info
+  - libsnmp-dev
+  - perl
+  - libcap-dev
+  - libelf-dev
+  - libunwind-dev
+  - protobuf-c-compiler
+  - libprotobuf-c-dev
+  - python3-pytest
+  - libyang2-dev
 
 runcmd:
   # Rust
@@ -28,3 +52,39 @@ runcmd:
   - git clone https://github.com/mininet/mininet.git /opt/mininet
   - /opt/mininet/util/install.sh -nfv
 
+  # Paris Traceroute
+  - apt update
+  - apt safe-upgrade
+  - apt install autoconf build-essential git libtool
+  - mkdir ~/git
+  - cd ~/git
+  - git clone https://github.com/libparistraceroute/libparistraceroute.git
+  - cd ~/git/libparistraceroute
+  - mkdir m4
+  - ./autogen.sh
+  - ./configure
+  - make 
+  - make install
+
+  # FRR Installation
+  # Create FRR user and groups
+  - groupadd -r -g 92 frr
+  - groupadd -r -g 85 frrvty
+  - adduser --system --ingroup frr --home /var/run/frr/ --gecos "FRR suite" --shell /sbin/nologin frr
+  - usermod -a -G frrvty frr
+
+  # Get FRR 9.1 source code
+  - cd ~/git
+  - git clone https://github.com/FRRouting/frr.git
+  - cd ~/git/frr
+  - git checkout stable/9.1
+
+  # Update the build system
+  - cd ~/git/frr
+  - ./bootstrap.sh
+
+  # Compile and install
+  - cd ~/git/frr
+  - './configure --prefix=/usr --includedir=\${prefix}/include --bindir=\${prefix}/bin --sbindir=\${prefix}/lib/frr --libdir=\${prefix}/lib/frr --libexecdir=\${prefix}/lib/frr --sysconfdir=/etc/frr --localstatedir=/var/frr --with-moduledir=\${prefix}/lib/frr/modules --enable-configfile-mask=0640 --enable-logfile-mask=0640 --enable-snmp=agentx --enable-multipath=64 --enable-user=frr --enable-group=frr --enable-vty-group=frrvty --with-pkg-git-version --with-pkg-extra-version=-MyCustomFRR'
+  - make
+  - make install

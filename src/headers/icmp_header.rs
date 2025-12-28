@@ -27,6 +27,9 @@ impl TransportHeader for IcmpHeader {
 
         buf
     }
+    fn increment_sequence_number(&mut self) {
+        self.sequence_number = self.sequence_number.wrapping_add(1);
+    }
 }
 
 pub struct IcmpHeaderBuilder {

@@ -4,12 +4,13 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 use std::{thread};
 use clap::Parser;
 use ctrlc;
 use glasgow_traceroute::applications::ping::Ping;
 use glasgow_traceroute::enums::{Tool, ProbeType, TransportProtocol};
+use glasgow_traceroute::helpers::packet_parser;
 
 #[derive(Parser, Debug)]
 #[command(name = "glasgow-traceroute")]
@@ -29,16 +30,6 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    // Validate IP version for the chosen probe_type
-    match args.probe_type {
-        ProbeType::Icmp | ProbeType::Tcp | ProbeType::Udp => {
-            let _v4: Ipv4Addr = args
-                .destination
-                .parse::<Ipv4Addr>()
-                .expect("ICMP/TCP/UDP probes require an IPv4 address");
-        }
-    }
-
     if matches!(args.probe_type, ProbeType::Tcp | ProbeType::Udp) && args.port.is_none() {
         panic!("TCP and UDP probes require --port");
     }
@@ -57,10 +48,10 @@ fn main() {
         Tool::Ping => {
             println!("PING {}:", args.destination);
 
-            let dest = args
+            let dest: Ipv4Addr = args
                 .destination
-                .parse::<Ipv4Addr>()
-                .expect("invalid destination IPv4");
+                .parse()
+                .expect("Invalid IPv4 address");
 
             // Map ProbeType to TransportProtocol used by Ping
             let transport = match args.probe_type {
@@ -92,21 +83,26 @@ fn main() {
                             .unwrap();
 
                         if args.probe_type == ProbeType::Icmp {
+                            // Use packet_parser helper to extract sequence number properly
+                            let seq = packet_parser::extract_icmp_identifier_seq(&res.raw_packet)
+                                .map(|(_src_ip, _identifier, sequence)| sequence)
+                                .unwrap_or(0);
+                            
                             println!(
-                                "ICMP {} bytes from {}: time={:.3} ms",
+                                "Sent ICMP echo request, received ICMP echo reply: {} bytes from {}: icmp_seq={} time={:.3} ms",
                                 res.bytes_received,
                                 res.destination,
+                                seq,
                                 rtt_ms
                             );
                         } else if args.probe_type == ProbeType::Udp {
                             println!(
-                                "UDP reply from {}: time={:.3} ms",
+                                "Sent UDP request, received ICMP reply: {} bytes from {}: time={:.3} ms",
+                                res.bytes_received,
                                 res.destination,
                                 rtt_ms
                             );
                         }
-
-
                         packets_received += 1;
                         rtts_ms.push(rtt_ms);
                     }
