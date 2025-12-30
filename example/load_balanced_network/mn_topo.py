@@ -23,13 +23,13 @@ class LoadBalancer(Node):
 
 class NetworkTopo(Topo):
     def build(self, **_opts):
-        #add routers
-        l = self.addHost('l', cls = LoadBalancer, ip='10.1.0.1/24')
-        a = self.addHost('a', cls = LoadBalancer, ip='10.2.0.1/24')
-        b = self.addHost('b', cls = LoadBalancer, ip='10.3.0.1/24')
-        c = self.addHost('c', cls = LoadBalancer, ip='10.4.0.1/24')
-        d = self.addHost('d', cls = LoadBalancer, ip='10.5.0.1/24') 
-        e = self.addHost('e', cls = LoadBalancer, ip='10.6.0.1/24')
+        #add routers - ip= must match the FIRST interface that will be created
+        l = self.addHost('l', cls = LoadBalancer, ip='10.1.0.1/24')      # l-eth0 to s1
+        a = self.addHost('a', cls = LoadBalancer, ip='10.100.0.2/24')    # a-eth0 to l
+        b = self.addHost('b', cls = LoadBalancer, ip='10.101.0.2/24')    # b-eth0 to l
+        c = self.addHost('c', cls = LoadBalancer, ip='10.102.0.2/24')    # c-eth0 to a
+        d = self.addHost('d', cls = LoadBalancer, ip='10.103.0.2/24')    # d-eth0 to b
+        e = self.addHost('e', cls = LoadBalancer, ip='10.6.0.1/24')      # e-eth2 to s2
 
         #add switch
         s1 = self.addSwitch('s1')
@@ -105,11 +105,13 @@ def run():
     # frr for all routers
     
     info(net['l'].cmd("/usr/lib/frr/frrinit.sh start 'l'"))
+    info(net['l'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
     info(net['a'].cmd("/usr/lib/frr/frrinit.sh start 'a'"))
     info(net['b'].cmd("/usr/lib/frr/frrinit.sh start 'b'"))
     info(net['c'].cmd("/usr/lib/frr/frrinit.sh start 'c'"))
     info(net['d'].cmd("/usr/lib/frr/frrinit.sh start 'd'"))
     info(net['e'].cmd("/usr/lib/frr/frrinit.sh start 'e'"))
+    info(net['e'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
 
     net.start()
     CLI(net)
