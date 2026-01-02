@@ -43,8 +43,7 @@ runcmd:
   # Clone Glasgow Traceroute
   - cd /home/ubuntu/git
   - git clone https://gitlab.cis.strath.ac.uk/rnb22136/glasgow-traceroute.git
+
   # Fix ownership
-  - cd glasgow-traceroute/example/load_balanced_network
-  - bash install_frr.sh
   - chown -R ubuntu:ubuntu /home/ubuntu/git
 
