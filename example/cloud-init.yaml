@@ -25,10 +25,6 @@ runcmd:
   - su - ubuntu -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
   - echo 'source $HOME/.cargo/env' >> /home/ubuntu/.bashrc
 
-  # Mininet
-  - git clone https://github.com/mininet/mininet.git /opt/mininet
-  - DEBIAN_FRONTEND=noninteractive /opt/mininet/util/install.sh -nfv
-
   # Paris Traceroute
   - apt update
   - apt upgrade -y
@@ -43,3 +39,12 @@ runcmd:
   - make -j2
   - make install
   - ldconfig
+
+  # Clone Glasgow Traceroute
+  - cd /home/ubuntu/git
+  - git clone https://gitlab.cis.strath.ac.uk/rnb22136/glasgow-traceroute.git
+  # Fix ownership
+  - cd glasgow-traceroute/example/load_balanced_network
+  - bash install_frr.sh
+  - chown -R ubuntu:ubuntu /home/ubuntu/git
+
