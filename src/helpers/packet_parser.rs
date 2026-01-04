@@ -137,9 +137,10 @@ pub fn packet_matches(
             
             if let Some(identifier) = expected_icmp_identifier {
                 if let Some(seq) = expected_icmp_sequence {
-                    if let Some((recv_src_ip, recv_id, recv_seq)) = extract_icmp_identifier_seq(packet) {
-                        return recv_src_ip == expected_destination && recv_id == identifier && recv_seq == seq;
+                    if let Some((_recv_src_ip, recv_id, recv_seq)) = extract_icmp_identifier_seq(packet) {
+                        return recv_id == identifier && recv_seq == seq;
                     }
+                    return false; // Not a valid Echo Reply
                 }
             }
             false

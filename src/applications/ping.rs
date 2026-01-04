@@ -97,12 +97,14 @@ impl Ping {
         self.transport_header.increment_sequence_number();
         let mut transport_bytes = self.transport_header.to_byte_array(&payload);
         
-        // Extract expected sequence number for ICMP (from bytes 6-7)
-        let expected_seq_opt = match self.transport_type {
+        // Extract expected identifier and sequence number for ICMP (from bytes 4-5 and 6-7)
+        let (expected_id_opt, expected_seq_opt) = match self.transport_type {
             TransportProtocol::Icmp => {
-                Some(u16::from_be_bytes([transport_bytes[6], transport_bytes[7]]))
+                let id = u16::from_be_bytes([transport_bytes[4], transport_bytes[5]]);
+                let seq = u16::from_be_bytes([transport_bytes[6], transport_bytes[7]]);
+                (Some(id), Some(seq))
             }
-            _ => None, // Not used for UDP
+            _ => (None, None), // Not used for UDP
         };
         
         let local_ip = self.ipv4_header.source_address;
@@ -134,7 +136,7 @@ impl Ping {
                         packet,
                         &self.transport_type,
                         self.destination,
-                        self.icmp_identifier,
+                        expected_id_opt,
                         expected_seq_opt,
                         self.udp_source_port,
                         local_ip,
