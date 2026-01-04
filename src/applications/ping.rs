@@ -30,7 +30,7 @@ pub struct PingResult {
     pub raw_packet: Vec<u8>,
 }
 
-impl Ping{
+impl Ping {
     pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, port: Option<u16>) -> Self {
         let socket_protocol;
         let ip_protocol;
@@ -38,7 +38,7 @@ impl Ping{
         let (icmp_identifier, udp_source_port);
         
         match transport_type {
-           TransportProtocol::ICMP => {
+           TransportProtocol::Icmp => {
                socket_protocol = Some(Protocol::ICMPV4);
                ip_protocol = IpProtocol::ICMP;
                let identifier = std::process::id() as u16;
@@ -51,7 +51,7 @@ impl Ping{
                );
 
            }
-           TransportProtocol::UDP => {
+           TransportProtocol::Udp => {
                socket_protocol = Some(Protocol::ICMPV4);
                ip_protocol = crate::enums::IpProtocol::UDP;
                let dest_port = port.unwrap_or(33434);
@@ -63,9 +63,6 @@ impl Ping{
                    .destination_port(dest_port)
                    .build()
                );
-           }
-           _ => {
-               panic!("Unsupported transport protocol for Ping");
            }
         }
         let user_local_ip: Ipv4Addr = match local_ip().expect("Failed to get local IP") {
@@ -102,7 +99,7 @@ impl Ping{
         
         // Extract expected sequence number for ICMP (from bytes 6-7)
         let expected_seq_opt = match self.transport_type {
-            TransportProtocol::ICMP => {
+            TransportProtocol::Icmp => {
                 Some(u16::from_be_bytes([transport_bytes[6], transport_bytes[7]]))
             }
             _ => None, // Not used for UDP
@@ -111,12 +108,11 @@ impl Ping{
         let local_ip = self.ipv4_header.source_address;
         
         // Build packet with Network byte order to create IP packet structure for checksum calculation
-        // (required for UDP checksum which includes IP pseudo-header)
         let parser_packet = self.ipv4_header.build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
 
         let temp_ip_packet = packet::ip::Packet::new(parser_packet.as_slice()).unwrap();
 
-        // Apply IP context (e.g., calculate UDP checksum)
+        // Apply IP context 
         self.transport_header.apply_ip_context(&temp_ip_packet, &mut transport_bytes);
 
         // Build final packet with platform-appropriate byte order for sending

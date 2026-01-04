@@ -29,12 +29,18 @@ impl TransportHeader for IcmpHeader {
     }
     fn increment_sequence_number(&mut self) {
         self.sequence_number = self.sequence_number.wrapping_add(1);
+        // Paris Traceroute: "For ICMP Echo probes, Paris traceroute varies the 
+        // Sequence Number field, as does classic traceroute, but also varies the 
+        // Identifier field, so as to keep constant the value for the Checksum field."
+        // — Augustin et al., "Avoiding Traceroute Anomalies with Paris Traceroute", IMC 2006, Section 2.2
+        self.identifier = self.identifier.wrapping_sub(1);
     }
 }
 
 pub struct IcmpHeaderBuilder {
     icmp_type: IcmpType,
     code: IcmpCode,
+    #[allow(dead_code)] // computed dynamically in to_byte_array()
     checksum: u16,
     identifier: u16,
     sequence_number: u16,
@@ -45,7 +51,7 @@ impl IcmpHeaderBuilder {
         IcmpHeaderBuilder {
             icmp_type: IcmpType::EchoRequest,
             code: IcmpCode::None,
-            checksum: 0,
+            checksum: 0, // computed dynamically
             identifier: std::process::id() as u16,
             sequence_number: 0,
         }

@@ -1,5 +1,3 @@
-//!
-
 use std::net::Ipv4Addr;
 use packet::ip::v4::checksum;
 use crate::enums::IpFlags::DontFragment;
@@ -114,10 +112,9 @@ impl Ipv4Header {
 
         buf.extend_from_slice(&self.destination_address.octets());
 
-        //compute checksum and
         let checksum = checksum(&buf[..20]);
 
-        // Insert checksum into bytes 10 and 11
+        
         buf[10] = (checksum >> 8) as u8;
         buf[11] = (checksum & 0xFF) as u8;
 
@@ -200,46 +197,6 @@ impl Ipv4HeaderBuilder {
             source_address: self.source_address,
             destination_address: self.destination_address
         }
-    }
-
-    pub fn version(&self) -> u8 {
-        self.version
-    }
-
-    pub fn internet_header_length(&self) -> u8 {
-        self.internet_header_length
-    }
-
-    pub fn type_of_service(&self) -> u8 {
-        self.type_of_service
-    }
-
-    pub fn explicit_congestion_notification(&self) -> u8 {
-        self.explicit_congestion_notification
-    }
-
-    pub fn total_length(&self) -> u16 {
-        self.total_length
-    }
-
-    pub fn identification(&self) -> u16 {
-        self.identification
-    }
-
-    pub fn flags(&self) -> &IpFlags {
-        &self.flags
-    }
-
-    pub fn fragment_offset(&self) -> u16 {
-        self.fragment_offset
-    }
-
-    pub fn time_to_live(&self) -> u8 {
-        self.time_to_live
-    }
-
-    pub fn header_checksum(&self) -> u16 {
-        self.header_checksum
     }
 }
 

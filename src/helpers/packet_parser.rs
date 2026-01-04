@@ -79,6 +79,33 @@ pub fn extract_udp_source_port_from_icmp_error(packet: &[u8], local_ip: Ipv4Addr
     Some((src_ip, src_port))
 }
 
+pub fn extract_icmp_identifier_seq_from_icmp_error(packet: &[u8]) -> Option<(Ipv4Addr, u16, u16)> {
+    const IP_HEADER_LEN: usize = 20;
+    const ICMP_HEADER_LEN: usize = 8;
+    const MIN_LEN: usize = IP_HEADER_LEN + ICMP_HEADER_LEN + IP_HEADER_LEN + ICMP_HEADER_LEN;
+    
+    if packet.len() < MIN_LEN {
+        return None;
+    }
+    
+    // Check ICMP type is Time Exceeded or Destination Unreachable
+    let icmp_type = packet[IP_HEADER_LEN];
+    if icmp_type != IcmpType::TimeExceeded.to_u8() && icmp_type != IcmpType::DestinationUnreachable.to_u8() {
+        return None;
+    }
+    
+    // Router that sent the error (source IP from outer IP header, bytes 12-15)
+    let src_ip = Ipv4Addr::new(packet[12], packet[13], packet[14], packet[15]);
+    
+    // Embedded ICMP starts at: IP(20) + ICMP_error(8) + embedded_IP(20) = 48
+    // Identifier at offset 4, Sequence at offset 6 within ICMP header
+    const EMBEDDED_ICMP_START: usize = IP_HEADER_LEN + ICMP_HEADER_LEN + IP_HEADER_LEN;
+    let identifier = u16::from_be_bytes([packet[EMBEDDED_ICMP_START + 4], packet[EMBEDDED_ICMP_START + 5]]);
+    let sequence = u16::from_be_bytes([packet[EMBEDDED_ICMP_START + 6], packet[EMBEDDED_ICMP_START + 7]]);
+    
+    Some((src_ip, identifier, sequence))
+}
+
 pub fn extract_source_ip(packet: &[u8]) -> Option<Ipv4Addr> {
     if packet.len() < 20 {
         return None;
@@ -96,7 +123,7 @@ pub fn packet_matches(
     local_ip: Ipv4Addr,
 ) -> bool {
     match transport_type {
-        TransportProtocol::ICMP => {
+        TransportProtocol::Icmp => {
             if packet.len() < 20 {
                 return false;
             }
@@ -117,7 +144,7 @@ pub fn packet_matches(
             }
             false
         }
-        TransportProtocol::UDP => {
+        TransportProtocol::Udp => {
             if let Some(expected_src_port) = expected_udp_source_port {
                 if let Some((recv_src_ip, recv_src_port)) = extract_udp_source_port_from_icmp_error(packet, local_ip) {
                     return recv_src_ip == expected_destination && recv_src_port == expected_src_port;
@@ -125,7 +152,6 @@ pub fn packet_matches(
             }
             false
         }
-        _ => false,
     }
 }
 

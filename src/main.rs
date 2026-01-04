@@ -7,9 +7,9 @@ use std::sync::{
 use std::time::{Duration};
 use std::{thread};
 use clap::Parser;
-use ctrlc;
 use glasgow_traceroute::applications::ping::Ping;
-use glasgow_traceroute::enums::{Tool, ProbeType, TransportProtocol};
+use glasgow_traceroute::applications::traceroute::Traceroute;
+use glasgow_traceroute::enums::{Tool, TransportProtocol};
 use glasgow_traceroute::helpers::packet_parser;
 
 #[derive(Parser, Debug)]
@@ -19,7 +19,7 @@ struct Args {
     tool: Tool,
 
     #[arg(value_enum)]
-    probe_type: ProbeType,
+    probe_type: TransportProtocol,
 
     destination: String,
 
@@ -30,8 +30,8 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    if matches!(args.probe_type, ProbeType::Tcp | ProbeType::Udp) && args.port.is_none() {
-        panic!("TCP and UDP probes require --port");
+    if matches!(args.probe_type, TransportProtocol::Udp) && args.port.is_none() {
+        panic!("UDP probes require --port");
     }
 
     // Ctrl-C handler
@@ -53,21 +53,11 @@ fn main() {
                 .parse()
                 .expect("Invalid IPv4 address");
 
-            // Map ProbeType to TransportProtocol used by Ping
-            let transport = match args.probe_type {
-                ProbeType::Icmp => TransportProtocol::ICMP,
-                ProbeType::Udp => TransportProtocol::UDP,
-                ProbeType::Tcp => {
-                    // current Ping implementation supports ICMP and UDP only
-                    panic!("TCP probe not supported by Ping implementation");
-                }
-            };
-
             // timeout_ms, payload_size
             let timeout_ms = 1000;
             let payload_size = 36;
 
-            let mut ping = Ping::new(transport, dest, timeout_ms, payload_size, args.port);
+            let mut ping = Ping::new(args.probe_type.clone(), dest, timeout_ms, payload_size, args.port);
 
             let mut packets_sent: u64 = 0;
             let mut packets_received: u64 = 0;
@@ -82,7 +72,7 @@ fn main() {
                             .map(|d| d.as_secs_f64() * 1000.0)
                             .unwrap();
 
-                        if args.probe_type == ProbeType::Icmp {
+                        if args.probe_type == TransportProtocol::Icmp {
                             // Use packet_parser helper to extract sequence number properly
                             let seq = packet_parser::extract_icmp_identifier_seq(&res.raw_packet)
                                 .map(|(_src_ip, _identifier, sequence)| sequence)
@@ -95,7 +85,7 @@ fn main() {
                                 seq,
                                 rtt_ms
                             );
-                        } else if args.probe_type == ProbeType::Udp {
+                        } else if args.probe_type == TransportProtocol::Udp {
                             println!(
                                 "Sent UDP request, received ICMP reply: {} bytes from {}: time={:.3} ms",
                                 res.bytes_received,
@@ -128,19 +118,24 @@ fn main() {
             );
 
             if !rtts_ms.is_empty() {
-                let min = rtts_ms.iter().cloned().fold(f64::INFINITY, f64::min);
-                let max = rtts_ms.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-                let sum: f64 = rtts_ms.iter().sum();
-                let avg = sum / (rtts_ms.len() as f64);
-                let var = rtts_ms
-                    .iter()
-                    .map(|v| {
-                        let d = v - avg;
-                        d * d
-                    })
-                    .sum::<f64>()
-                    / (rtts_ms.len() as f64);
-                let stddev = var.sqrt();
+                let mut min = f64::INFINITY;
+                let mut max = f64::NEG_INFINITY;
+                let mut sum = 0.0;
+                
+                for rtt in &rtts_ms {
+                    if *rtt < min { min = *rtt; }
+                    if *rtt > max { max = *rtt; }
+                    sum += rtt;
+                }
+                
+                let avg = sum / rtts_ms.len() as f64;
+                
+                let mut variance_sum = 0.0;
+                for rtt in &rtts_ms {
+                    let diff = rtt - avg;
+                    variance_sum += diff * diff;
+                }
+                let stddev = (variance_sum / rtts_ms.len() as f64).sqrt();
 
                 println!(
                     "round-trip min/avg/max/stddev = {:.3}/{:.3}/{:.3}/{:.3} ms",
@@ -150,7 +145,33 @@ fn main() {
         }
 
         Tool::Traceroute => {
-            println!("Traceroute tool selected");
+            let dest: Ipv4Addr = args
+                .destination
+                .parse()
+                .expect("Invalid IPv4 address");
+
+            let timeout_ms = 2000;
+            let payload_size = 36;
+            let max_ttl = 30;
+
+            println!("traceroute to {} ({}), {} hops max", args.destination, dest, max_ttl);
+
+            let mut traceroute = Traceroute::new(args.probe_type.clone(), dest, timeout_ms, payload_size, max_ttl);
+            let results = traceroute.trace_route();
+
+            for hop in results {
+                match hop.address {
+                    Some(addr) => {
+                        let rtt_str = hop.rtt
+                            .map(|d| format!("{:.3} ms", d.as_secs_f64() * 1000.0))
+                            .unwrap_or_else(|| "*".to_string());
+                        println!("{:2}  {}  {}", hop.ttl, addr, rtt_str);
+                    }
+                    None => {
+                        println!("{:2}  *", hop.ttl);
+                    }
+                }
+            }
         }
     }
 }

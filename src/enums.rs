@@ -9,13 +9,6 @@ pub enum Tool {
     Ping,
     Traceroute
 }
-/// Supported probe types
-#[derive(ValueEnum, Clone, Debug, Eq, PartialEq)]
-pub enum ProbeType {
-    Icmp,
-    Tcp,
-    Udp
-}
 #[derive(Clone, Debug)]
 pub enum IcmpType {
     EchoReply = 0,
@@ -150,9 +143,9 @@ pub enum ByteOrderMode {
     Auto,
 }
 
-/// Transport Layer Protocols
+/// Transport/Probe Protocol (ICMP is not technically transport layer but included for probing)
+#[derive(ValueEnum, Clone, Debug, Eq, PartialEq)]
 pub enum TransportProtocol {
-    ICMP,  // Although ICMP is not a transport layer protocol, it's included here for completeness
-    TCP,
-    UDP,
+    Icmp,
+    Udp,
 }
