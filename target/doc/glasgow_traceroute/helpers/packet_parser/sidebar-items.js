@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["extract_icmp_identifier_seq","extract_icmp_identifier_seq_from_icmp_error","extract_source_ip","extract_udp_source_port_from_icmp_error","packet_matches"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Kind"],"fn":["checksum"],"mod":["code","echo","information","parameter_problem","previous","redirect_message","timestamp"],"struct":["Builder","Packet"]};

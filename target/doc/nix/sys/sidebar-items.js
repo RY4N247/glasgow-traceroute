@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["prctl","signal","signalfd","sysinfo","time","wait"]};

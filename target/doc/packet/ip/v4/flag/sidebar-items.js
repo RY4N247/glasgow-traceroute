@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["DONT_FRAGMENT","MORE_FRAGMENTS"],"struct":["Flags"]};

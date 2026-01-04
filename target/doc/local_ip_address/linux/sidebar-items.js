@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["list_afinet_netifas","local_broadcast_ip","local_ip","local_ipv6"]};

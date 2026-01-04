@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Packet","Protocol"],"mod":["v4","v6"],"struct":["Builder"]};
