@@ -77,7 +77,7 @@ fn main() {
                             let seq = packet_parser::extract_icmp_identifier_seq(&res.raw_packet)
                                 .map(|(_src_ip, _identifier, sequence)| sequence)
                                 .unwrap_or(0);
-                            
+
                             println!(
                                 "Sent ICMP echo request, received ICMP echo reply: {} bytes from {}: icmp_seq={} time={:.3} ms",
                                 res.bytes_received,
@@ -121,15 +121,15 @@ fn main() {
                 let mut min = f64::INFINITY;
                 let mut max = f64::NEG_INFINITY;
                 let mut sum = 0.0;
-                
+
                 for rtt in &rtts_ms {
                     if *rtt < min { min = *rtt; }
                     if *rtt > max { max = *rtt; }
                     sum += rtt;
                 }
-                
+
                 let avg = sum / rtts_ms.len() as f64;
-                
+
                 let mut variance_sum = 0.0;
                 for rtt in &rtts_ms {
                     let diff = rtt - avg;
