@@ -28,6 +28,12 @@ impl TransportHeader for UdpHeader {
         let checksum = packet::udp::checksum(ip_packet, transport_bytes);
         transport_bytes[6..8].copy_from_slice(&checksum.to_be_bytes());
     }
+    fn increment_sequence_number(&mut self) {
+            // increment destination port and decrement source port to keep checksum constant
+            self.destination_port = self.destination_port.wrapping_add(1);
+            self.source_port = self.source_port.wrapping_sub(1);
+
+    }
 }
 pub struct UdpHeaderBuilder {
     source_port: u16,

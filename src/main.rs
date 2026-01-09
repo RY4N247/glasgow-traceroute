@@ -1,5 +1,7 @@
 // File: `src/main.rs`
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -25,13 +27,17 @@ struct Args {
 
     #[arg(long)]
     port: Option<u16>,
+
+    #[arg(long)]
+    topology: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
 
-    if matches!(args.probe_type, TransportProtocol::Udp) && args.port.is_none() {
-        panic!("UDP probes require --port");
+    // Only require --port for Ping with UDP, not for Traceroute
+    if matches!(args.tool, Tool::Ping) && matches!(args.probe_type, TransportProtocol::Udp) && args.port.is_none() {
+        panic!("UDP ping requires --port");
     }
 
     // Ctrl-C handler
@@ -154,23 +160,74 @@ fn main() {
             let payload_size = 36;
             let max_ttl = 30;
 
+    
+
             println!("traceroute to {} ({}), {} hops max", args.destination, dest, max_ttl);
 
+
             let mut traceroute = Traceroute::new(args.probe_type.clone(), dest, timeout_ms, payload_size, max_ttl);
+            
+            // Get host IP from traceroute instance
+            let host_ip = traceroute.source_address();
             let results = traceroute.trace_route();
 
-            for hop in results {
+            // Collect IP addresses from traceroute results
+            let mut traceroute_ips: Vec<String> = Vec::new();
+            
+            // Add host IP at the beginning
+            traceroute_ips.push(host_ip.to_string());
+            
+            for hop in &results {
                 match hop.address {
                     Some(addr) => {
                         let rtt_str = hop.rtt
                             .map(|d| format!("{:.3} ms", d.as_secs_f64() * 1000.0))
                             .unwrap_or_else(|| "*".to_string());
                         println!("{:2}  {}  {}", hop.ttl, addr, rtt_str);
+                        traceroute_ips.push(addr.to_string());
                     }
                     None => {
                         println!("{:2}  *", hop.ttl);
                     }
                 }
+            }
+
+            if let Some(ref topology_path) = args.topology {
+                let root = env!("CARGO_MANIFEST_DIR");
+                let venv_python = PathBuf::from(root).join(".venv/bin/python3");
+
+                // Check if venv exists and has dependencies
+                let needs_setup = !venv_python.exists() || 
+                    Command::new(&venv_python)
+                        .arg("-c").arg("import yaml, networkx, phart")
+                        .output()
+                        .map(|o| !o.status.success())
+                        .unwrap_or(true);
+                
+                if needs_setup {
+                    println!("Failed to print topology: ");
+                    println!("    - Python venv not found or missing dependencies.");
+                    println!("    - Please run on the host (not in mininet): src/pycall/setup_py_venv.sh");
+                    println!("    - Or run: python3 -m venv .venv && .venv/bin/pip install -r src/pycall/requirements.txt");
+                    return;
+                }
+
+                // Convert IP addresses to JSON
+                let ips_json = serde_json::to_string(&traceroute_ips).unwrap_or_else(|_| "[]".to_string());
+                
+                // Run script
+                let output = Command::new(&venv_python)
+                    .arg(PathBuf::from(root).join("src/pycall/print_topology.py"))
+                    .arg(topology_path)
+                    .arg(&ips_json)
+                    .output()
+                    .expect("Failed to run script");
+                
+                print!("{}", String::from_utf8_lossy(&output.stdout));
+                if !output.stderr.is_empty() {
+                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                }
+                
             }
         }
     }

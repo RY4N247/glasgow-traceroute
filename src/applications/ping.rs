@@ -66,8 +66,7 @@ use rand::Rng;
 /// - `ipv4_header`: Encapsulates ICMP/UDP packets providing network layer functionality.
 /// - `transport_header`: The transport layer header (technically ICMP is a network layer protocol but included to unify probe construction).
 /// - `transport_type`: The transport protocol used (ICMP or UDP).
-/// - `icmp_identifier`: Optional identifier for ICMP packets.
-/// - `udp_source_port`: Optional source port for UDP packets.
+/// - `udp_source_port`: Optional source port for UDP packets (used to match responses).
 pub struct Ping {
     destination: Ipv4Addr,
     payload_size: usize,
@@ -75,7 +74,6 @@ pub struct Ping {
     ipv4_header: Ipv4Header,
     transport_header: Box<dyn TransportHeader>,
     transport_type: TransportProtocol,
-    icmp_identifier: Option<u16>,  
     udp_source_port: Option<u16>,  
 }
 /// # PingResult Struct
@@ -104,14 +102,13 @@ impl Ping {
         let socket_protocol;
         let ip_protocol;
         let transport_header: Box<dyn TransportHeader>;
-        let (icmp_identifier, udp_source_port);
+        let udp_source_port: Option<u16>;
         
         match transport_type {
            TransportProtocol::Icmp => {
                socket_protocol = Some(Protocol::ICMPV4);
                ip_protocol = IpProtocol::ICMP;
                let identifier = std::process::id() as u16;
-               icmp_identifier = Some(identifier);
                udp_source_port = None;
                transport_header =
                    Box::new(IcmpHeaderBuilder::new()
@@ -125,7 +122,6 @@ impl Ping {
                ip_protocol = crate::enums::IpProtocol::UDP;
                let dest_port = port.unwrap_or(33434);
                let src_port = rand::rng().random_range(49152..65535);
-               icmp_identifier = None;
                udp_source_port = Some(src_port);
                transport_header = Box::new(UdpHeaderBuilder::new()
                    .source_port(src_port)
@@ -155,7 +151,6 @@ impl Ping {
             ipv4_header,
             transport_header,
             transport_type,
-            icmp_identifier,
             udp_source_port,
         }
     }
@@ -170,7 +165,10 @@ impl Ping {
     /// the operation fails or times out.
     pub fn send_ping(&mut self) -> Result<PingResult, std::io::Error> {
         let payload: Vec<u8> = vec![0u8; self.payload_size];
-        self.transport_header.increment_sequence_number();
+        // Only increment sequence for ICMP (for UDP ping, keep ports constant)
+        if matches!(self.transport_type, TransportProtocol::Icmp) {
+            self.transport_header.increment_sequence_number();
+        }
         let mut transport_bytes = self.transport_header.to_byte_array(&payload);
         
         // Extract expected identifier and sequence number for ICMP (from bytes 4-5 and 6-7)

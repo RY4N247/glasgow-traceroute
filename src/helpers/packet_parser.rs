@@ -79,6 +79,60 @@ pub fn extract_udp_source_port_from_icmp_error(packet: &[u8], local_ip: Ipv4Addr
     Some((src_ip, src_port))
 }
 
+pub fn extract_udp_ports_from_icmp_error(packet: &[u8], local_ip: Ipv4Addr) -> Option<(Ipv4Addr, u16, u16)> {
+    if packet.len() < 48 {
+        return None; 
+    }
+    let ip_header_len = ((packet[0] & 0x0f) * 4) as usize;
+    if packet.len() < ip_header_len + 8 + 20 {
+        return None;
+    }
+    
+    let src_ip = Ipv4Addr::new(
+        packet[12],
+        packet[13],
+        packet[14],
+        packet[15],
+    );
+    
+    let icmp_type = packet[ip_header_len];
+    if icmp_type != IcmpType::DestinationUnreachable.to_u8() && icmp_type != IcmpType::TimeExceeded.to_u8() {
+        return None;
+    }
+    let embedded_ip_start = ip_header_len + 8;
+    if packet.len() < embedded_ip_start + 20 {
+        return None;
+    }
+    
+    // Calculate embedded IP header length 
+    let embedded_ip_header_len = ((packet[embedded_ip_start] & 0x0f) * 4) as usize;
+    if packet.len() < embedded_ip_start + embedded_ip_header_len + 8 {
+        return None;
+    }
+    
+    // Check if the embedded IP header's protocol is UDP
+    let embedded_protocol = packet[embedded_ip_start + 9];
+    if embedded_protocol != IpProtocol::UDP.to_u8() {
+        return None;
+    }
+    
+    // Check if the embedded IP header's source address matches our local IP
+    let embedded_src = Ipv4Addr::new(
+        packet[embedded_ip_start + 12],
+        packet[embedded_ip_start + 13],
+        packet[embedded_ip_start + 14],
+        packet[embedded_ip_start + 15],
+    );
+    if embedded_src != local_ip {
+        return None;
+    }
+    // UDP header starts after embedded IP header
+    let udp_header_start = embedded_ip_start + embedded_ip_header_len;
+    let src_port = u16::from_be_bytes([packet[udp_header_start], packet[udp_header_start + 1]]);
+    let dst_port = u16::from_be_bytes([packet[udp_header_start + 2], packet[udp_header_start + 3]]);
+    Some((src_ip, src_port, dst_port))
+}
+
 pub fn extract_icmp_identifier_seq_from_icmp_error(packet: &[u8]) -> Option<(Ipv4Addr, u16, u16)> {
     const IP_HEADER_LEN: usize = 20;
     const ICMP_HEADER_LEN: usize = 8;
