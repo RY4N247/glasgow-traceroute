@@ -12,6 +12,7 @@ packages:
   - build-essential
   - python3
   - python3-pip
+  - python3.10-venv
   - pkg-config
   - libssl-dev
   - net-tools
