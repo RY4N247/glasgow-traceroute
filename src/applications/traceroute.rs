@@ -36,6 +36,7 @@
 //!     }
 //! }
 //! ```
+use std::collections::HashSet;
 use std::mem::MaybeUninit;
 use crate::enums::{TransportProtocol, IpProtocol};
 use crate::headers::icmp_header::IcmpHeaderBuilder;
@@ -63,6 +64,11 @@ pub struct HopResult {
     pub ttl: u8,
     pub address: Option<Ipv4Addr>,
     pub rtt: Option<Duration>,
+}
+pub struct MultipathOUTPUT {
+    pub r: u32,
+    pub pi_r: bool,
+    pub f_h_1_r: Vec<u32>,
 }
 
 /// # Traceroute Struct
@@ -243,4 +249,58 @@ impl Traceroute{
         }
         results
     }
+
+
+
+    // MDA IMPLEMENTATION     
+    fn next_hops(_r: u32, _h: u8, _alpha: f64) -> HashSet<u32> {
+        // TODO: Implement this
+        HashSet::new()
+    }
+    fn per_packet(_r: u32, _h: u8) -> bool {
+        // TODO: Implement this
+        false
+    }
+    fn output(x: MultipathOUTPUT) {
+        // TODO: Implement this
+        println!("r: {}, pi_r: {}, f_h_1_r: {:?}", x.r, x.pi_r, x.f_h_1_r);
+    }
+    // Symbol    Meaning
+    // ----------  ------------------------------------------------------------
+    // r, s     responding interface or successor of an interface
+    // h        hop (TTL value)
+    // α        degree of confidence
+    // ^Rh      set of interfaces discovered at distance h from the source
+    // ^Sr      set of nexthop interfaces of r
+    // φ        flow identifier
+    // Fh,r     set of flows traversing r at hop h
+    // πr       Boolean indicating if r belongs to a per-packet load balancer
+    pub fn multipath_traceroute(&mut self, hmin: u8, hmax: u8, alpha_all: f64) {
+        let alpha_nexthops = alpha_all;
+        let mut r_prev: HashSet<u32> = [0].into_iter().collect();
+
+        for h in hmin..=hmax.saturating_add(1) {
+            let mut r_h: HashSet<u32> = HashSet::new();
+            for &r in &r_prev {
+                let s_r = Self::next_hops(r, h, alpha_nexthops);
+                r_h.extend(&s_r);
+                if s_r.len() > 1 {
+                    let pi_r = Self::per_packet(r, h);
+                    let x = MultipathOUTPUT { r, pi_r, f_h_1_r: vec![0] };
+                    Self::output(x);
+                }
+            }
+            // Update R_{h-1} for next h
+            r_prev = r_h;
+        }
+    }
+
+
+
+
+
+
+
+
+    
 }
