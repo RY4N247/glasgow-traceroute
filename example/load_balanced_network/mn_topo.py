@@ -103,7 +103,7 @@ def run():
     net = Mininet(topo=topo)
     
     # frr for all routers
-    
+    #TODO: change to for loop once working 
     info(net['l'].cmd("/usr/lib/frr/frrinit.sh start 'l'"))
     info(net['l'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
     info(net['a'].cmd("/usr/lib/frr/frrinit.sh start 'a'"))

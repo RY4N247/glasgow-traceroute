@@ -9,6 +9,7 @@ use std::sync::{
 use std::time::{Duration};
 use std::{thread};
 use clap::Parser;
+use glasgow_traceroute::applications::mda::Mda;
 use glasgow_traceroute::applications::ping::Ping;
 use glasgow_traceroute::applications::traceroute::Traceroute;
 use glasgow_traceroute::enums::{Tool, TransportProtocol};
@@ -228,6 +229,36 @@ fn main() {
                     eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                 }
                 
+            }
+        }
+
+        Tool::Mda => {
+            if args.probe_type != TransportProtocol::Udp {
+                panic!("MDA only supports UDP. Use: mda udp <destination>");
+            }
+
+            let dest: Ipv4Addr = args
+                .destination
+                .parse()
+                .expect("Invalid IPv4 address");
+
+            let timeout_ms = 2000;
+            let payload_size = 36;
+            let max_ttl = 30;
+
+            println!("mda traceroute to {} ({}), {} hops max (UDP)", args.destination, dest, max_ttl);
+
+            let mda = Mda::new(dest, timeout_ms, payload_size);
+            let paths = mda.multipath_traceroute(1, max_ttl);
+
+            for (i, path) in paths.iter().enumerate() {
+                println!("Path {}:", i + 1);
+                for (ttl, addr) in path.iter().enumerate() {
+                    println!("  {:2}  {}", ttl + 1, addr);
+                }
+                if i < paths.len() - 1 {
+                    println!();
+                }
             }
         }
     }

@@ -19,6 +19,7 @@
 //! use std::net::Ipv4Addr;
 //! use glasgow_traceroute::applications::traceroute::Traceroute;
 //! use glasgow_traceroute::enums::TransportProtocol;
+//! use std::collections::hash_map::DefaultHasher;
 //!
 //! fn main() {
 //!     let destination = Ipv4Addr::new(8, 8, 8, 8);
@@ -36,7 +37,8 @@
 //!     }
 //! }
 //! ```
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::mem::MaybeUninit;
 use crate::enums::{TransportProtocol, IpProtocol};
 use crate::headers::icmp_header::IcmpHeaderBuilder;
@@ -52,7 +54,8 @@ use std::time::{Duration, Instant};
 // initial values for ICMP and UDP packets
 const ICMP_INITIAL_ID: u16 = 1000; 
 const UDP_INITIAL_DEST_PORT: u16 = 33434; 
-const UDP_INITIAL_SRC_PORT: u16 = 49152; 
+const UDP_INITIAL_SRC_PORT: u16 = 49152;
+
 
 /// # HopResult Struct
 /// Represents the result of a traceroute hop.
@@ -65,11 +68,9 @@ pub struct HopResult {
     pub address: Option<Ipv4Addr>,
     pub rtt: Option<Duration>,
 }
-pub struct MultipathOUTPUT {
-    pub r: u32,
-    pub pi_r: bool,
-    pub f_h_1_r: Vec<u32>,
-}
+
+//OUTPUT(r, πr, F{h-1,r})
+
 
 /// # Traceroute Struct
 /// Represents a traceroute operation.
@@ -191,15 +192,12 @@ impl Traceroute{
                         
                         match self.transport_type {
                             TransportProtocol::Udp => {
-                                // Expected values: destination port increments, source port decrements
-                                let expected_src_port = UDP_INITIAL_SRC_PORT.wrapping_sub(ttl as u16);
-                                let expected_dst_port = UDP_INITIAL_DEST_PORT.wrapping_add(ttl as u16);
-                                
-                                // Check for ICMP Time Exceeded or Destination Unreachable with UDP
+                                // Paris traceroute: ports are constant, match on fixed values.
+                                // Only one probe in flight, so first matching response is for current TTL.
                                 if let Some((src_ip, recv_src_port, recv_dst_port)) = 
                                     packet_parser::extract_udp_ports_from_icmp_error(recv_packet, local_ip) 
                                 {
-                                    if recv_src_port == expected_src_port && recv_dst_port == expected_dst_port {
+                                    if recv_src_port == UDP_INITIAL_SRC_PORT && recv_dst_port == UDP_INITIAL_DEST_PORT {
                                         results.push(HopResult { ttl, address: Some(src_ip), rtt: Some(rtt) });
                                      
                                         if src_ip == self.destination {
@@ -249,58 +247,5 @@ impl Traceroute{
         }
         results
     }
-
-
-
-    // MDA IMPLEMENTATION     
-    fn next_hops(_r: u32, _h: u8, _alpha: f64) -> HashSet<u32> {
-        // TODO: Implement this
-        HashSet::new()
-    }
-    fn per_packet(_r: u32, _h: u8) -> bool {
-        // TODO: Implement this
-        false
-    }
-    fn output(x: MultipathOUTPUT) {
-        // TODO: Implement this
-        println!("r: {}, pi_r: {}, f_h_1_r: {:?}", x.r, x.pi_r, x.f_h_1_r);
-    }
-    // Symbol    Meaning
-    // ----------  ------------------------------------------------------------
-    // r, s     responding interface or successor of an interface
-    // h        hop (TTL value)
-    // α        degree of confidence
-    // ^Rh      set of interfaces discovered at distance h from the source
-    // ^Sr      set of nexthop interfaces of r
-    // φ        flow identifier
-    // Fh,r     set of flows traversing r at hop h
-    // πr       Boolean indicating if r belongs to a per-packet load balancer
-    pub fn multipath_traceroute(&mut self, hmin: u8, hmax: u8, alpha_all: f64) {
-        let alpha_nexthops = alpha_all;
-        let mut r_prev: HashSet<u32> = [0].into_iter().collect();
-
-        for h in hmin..=hmax.saturating_add(1) {
-            let mut r_h: HashSet<u32> = HashSet::new();
-            for &r in &r_prev {
-                let s_r = Self::next_hops(r, h, alpha_nexthops);
-                r_h.extend(&s_r);
-                if s_r.len() > 1 {
-                    let pi_r = Self::per_packet(r, h);
-                    let x = MultipathOUTPUT { r, pi_r, f_h_1_r: vec![0] };
-                    Self::output(x);
-                }
-            }
-            // Update R_{h-1} for next h
-            r_prev = r_h;
-        }
-    }
-
-
-
-
-
-
-
-
     
 }

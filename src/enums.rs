@@ -7,7 +7,8 @@ use clap::ValueEnum;
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Tool {
     Ping,
-    Traceroute
+    Traceroute,
+    Mda,
 }
 #[derive(Clone, Debug)]
 pub enum IcmpType {
