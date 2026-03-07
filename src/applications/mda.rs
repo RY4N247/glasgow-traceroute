@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::mem::MaybeUninit;
 use crate::enums::{ByteOrderMode, IpProtocol};
 use crate::headers::ipv4_header::{Ipv4Header, Ipv4HeaderBuilder};
-use crate::headers::transport_header::TransportHeader;
 use crate::headers::udp_header::UdpHeaderBuilder;
 use crate::helpers::packet_parser;
 use socket2::*;

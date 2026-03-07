@@ -64,7 +64,7 @@ use rand::Rng;
 /// - `payload_size`: Size of the payload in bytes.
 /// - `socket`: The raw socket used for sending and receiving packets.
 /// - `ipv4_header`: Encapsulates ICMP/UDP packets providing network layer functionality.
-/// - `transport_header`: The transport layer header (technically ICMP is a network layer protocol but included to unify probe construction).
+/// - `transport_header`: The transport layer header (ICMP or UDP).
 /// - `transport_type`: The transport protocol used (ICMP or UDP).
 /// - `udp_source_port`: Optional source port for UDP packets (used to match responses).
 pub struct Ping {
@@ -72,7 +72,7 @@ pub struct Ping {
     payload_size: usize,
     socket: Socket,
     ipv4_header: Ipv4Header,
-    transport_header: Box<dyn TransportHeader>,
+    transport_header: TransportHeader,
     transport_type: TransportProtocol,
     udp_source_port: Option<u16>,  
 }
@@ -101,7 +101,7 @@ impl Ping {
     pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, port: Option<u16>) -> Self {
         let socket_protocol;
         let ip_protocol;
-        let transport_header: Box<dyn TransportHeader>;
+        let transport_header: TransportHeader;
         let udp_source_port: Option<u16>;
         
         match transport_type {
@@ -111,7 +111,7 @@ impl Ping {
                let identifier = std::process::id() as u16;
                udp_source_port = None;
                transport_header =
-                   Box::new(IcmpHeaderBuilder::new()
+                   TransportHeader::Icmp(IcmpHeaderBuilder::new()
                        .identifier(identifier)
                        .build()
                );
@@ -123,7 +123,7 @@ impl Ping {
                let dest_port = port.unwrap_or(33434);
                let src_port = rand::rng().random_range(49152..65535);
                udp_source_port = Some(src_port);
-               transport_header = Box::new(UdpHeaderBuilder::new()
+               transport_header = TransportHeader::Udp(UdpHeaderBuilder::new()
                    .source_port(src_port)
                    .destination_port(dest_port)
                    .build()

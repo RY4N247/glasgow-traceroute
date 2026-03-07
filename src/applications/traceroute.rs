@@ -37,8 +37,6 @@
 //!     }
 //! }
 //! ```
-use std::collections::{HashMap, HashSet};
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::mem::MaybeUninit;
 use crate::enums::{TransportProtocol, IpProtocol};
 use crate::headers::icmp_header::IcmpHeaderBuilder;
@@ -78,7 +76,7 @@ pub struct HopResult {
 /// - `destination`: The target IPv4 address to traceroute.
 /// - `socket`: The raw socket used for sending and receiving packets.
 /// - `ipv4_header`: Encapsulates ICMP/UDP packets providing network layer functionality.
-/// - `transport_header`: The transport layer header (technically ICMP is a network layer protocol but included to unify probe construction).
+/// - `transport_header`: The transport layer header (ICMP or UDP).
 /// - `transport_type`: The transport protocol used (ICMP or UDP).
 /// - `payload_size`: The size of the payload in bytes.
 /// - `max_ttl`: The maximum time to live value.
@@ -86,7 +84,7 @@ pub struct Traceroute {
     destination: Ipv4Addr,
     socket: Socket,
     ipv4_header: Ipv4Header,
-    transport_header: Box<dyn TransportHeader>,
+    transport_header: TransportHeader,
     transport_type: TransportProtocol,
     payload_size: usize,
     max_ttl: u8,
@@ -96,13 +94,13 @@ impl Traceroute{
     pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, max_ttl: u8) -> Self {
         let socket_protocol;
         let ip_protocol;
-        let transport_header: Box<dyn TransportHeader>;
+        let transport_header: TransportHeader;
         
         match transport_type {
             TransportProtocol::Icmp => {
                 socket_protocol = Some(Protocol::ICMPV4);
                 ip_protocol = IpProtocol::ICMP;
-                transport_header = Box::new(
+                transport_header = TransportHeader::Icmp(
                     IcmpHeaderBuilder::new()
                         .identifier(ICMP_INITIAL_ID)
                         .build()
@@ -111,7 +109,7 @@ impl Traceroute{
             TransportProtocol::Udp => {
                 socket_protocol = Some(Protocol::ICMPV4);
                 ip_protocol = IpProtocol::UDP;
-                transport_header = Box::new(
+                transport_header = TransportHeader::Udp(
                     UdpHeaderBuilder::new()
                         .source_port(UDP_INITIAL_SRC_PORT)
                         .destination_port(UDP_INITIAL_DEST_PORT)

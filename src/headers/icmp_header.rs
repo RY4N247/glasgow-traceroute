@@ -1,18 +1,19 @@
 /// https://www.geeksforgeeks.org/computer-networks/internet-control-message-protocol-icmp/
 use crate::enums::{IcmpCode, IcmpType};
 use packet::icmp::checksum;
-use crate::headers::transport_header::TransportHeader;
+
 #[derive(Debug)]
 pub struct IcmpHeader {
-    pub icmp_type:IcmpType,
+    pub icmp_type: IcmpType,
     pub code: IcmpCode,
     pub checksum: u16,
     pub identifier: u16,
     pub sequence_number: u16,
 }
-impl TransportHeader for IcmpHeader {
-    fn to_byte_array(&self, payload: &[u8]) -> Vec<u8> {
-        let mut buf:Vec<u8> = Vec::with_capacity(8 + payload.len());
+
+impl IcmpHeader {
+    pub fn to_byte_array(&self, payload: &[u8]) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::with_capacity(8 + payload.len());
 
         buf.push(self.icmp_type.to_u8());
         buf.push(self.code.to_u8());
@@ -27,10 +28,11 @@ impl TransportHeader for IcmpHeader {
 
         buf
     }
-    fn increment_sequence_number(&mut self) {
+
+    pub fn increment_sequence_number(&mut self) {
         self.sequence_number = self.sequence_number.wrapping_add(1);
-        // Paris Traceroute: "For ICMP Echo probes, Paris traceroute varies the 
-        // Sequence Number field, as does classic traceroute, but also varies the 
+        // Paris Traceroute: "For ICMP Echo probes, Paris traceroute varies the
+        // Sequence Number field, as does classic traceroute, but also varies the
         // Identifier field, so as to keep constant the value for the Checksum field."
         // — Augustin et al., "Avoiding Traceroute Anomalies with Paris Traceroute", IMC 2006, Section 2.2
         self.identifier = self.identifier.wrapping_sub(1);
