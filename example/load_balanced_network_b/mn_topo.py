@@ -160,42 +160,31 @@ class NetworkTopo(Topo):
 def run():
     topo = NetworkTopo()
     net = Mininet(topo=topo)
-    
-    # frr for all routers
-    # TODO: change to for loop once working
-    info(net['l1'].cmd("/usr/lib/frr/frrinit.sh start 'l1'"))
-    info(net['l1'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
-    info(net['l2'].cmd("/usr/lib/frr/frrinit.sh start 'l2'"))
-    info(net['l2'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
-    info(net['l3'].cmd("/usr/lib/frr/frrinit.sh start 'l3'"))
-    info(net['l3'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
-    info(net['a'].cmd("/usr/lib/frr/frrinit.sh start 'a'"))
-    info(net['b'].cmd("/usr/lib/frr/frrinit.sh start 'b'"))
-    info(net['c'].cmd("/usr/lib/frr/frrinit.sh start 'c'"))
-    info(net['d'].cmd("/usr/lib/frr/frrinit.sh start 'd'"))
-    info(net['e'].cmd("/usr/lib/frr/frrinit.sh start 'e'"))
-    info(net['e'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
-    info(net['f'].cmd("/usr/lib/frr/frrinit.sh start 'f'"))
-    info(net['f'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
-    info(net['g'].cmd("/usr/lib/frr/frrinit.sh start 'g'"))
-    info(net['g'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=1")) # enable layer 4 hashing
 
+    routers = ['l1', 'l2', 'l3', 'a', 'b', 'c', 'd', 'e', 'f', 'g']
+    for r in routers:
+        info(net[r].cmd("/usr/lib/frr/frrinit.sh start '{}'".format(r)))
+    info(net['l1'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['l1'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0133"))
+    info(net['l2'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['l2'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0037"))
+    info(net['l3'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['l3'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0037"))
+    info(net['e'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['e'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0027"))
+    info(net['f'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['f'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0036"))
+    info(net['g'].cmd("sysctl -w net.ipv4.fib_multipath_hash_policy=3"))
+    info(net['g'].cmd("sysctl -w net.ipv4.fib_multipath_hash_fields=0x0133"))
+
+    for r in routers:
+        info(net[r].cmd("sysctl -w net.ipv4.icmp_errors_use_inbound_ifaddr=1"))
 
     net.start()
     CLI(net)
 
-    info(net['l1'].cmd("/usr/lib/frr/frrinit.sh stop 'l1'"))
-    info(net['l2'].cmd("/usr/lib/frr/frrinit.sh stop 'l2'"))
-    info(net['l3'].cmd("/usr/lib/frr/frrinit.sh stop 'l3'"))
-    info(net['a'].cmd("/usr/lib/frr/frrinit.sh stop 'a'"))
-    info(net['b'].cmd("/usr/lib/frr/frrinit.sh stop 'b'"))
-    info(net['c'].cmd("/usr/lib/frr/frrinit.sh stop 'c'"))
-    info(net['d'].cmd("/usr/lib/frr/frrinit.sh stop 'd'"))
-    info(net['e'].cmd("/usr/lib/frr/frrinit.sh stop 'e'"))
-    info(net['f'].cmd("/usr/lib/frr/frrinit.sh stop 'f'"))
-    info(net['g'].cmd("/usr/lib/frr/frrinit.sh stop 'g'"))
-
-
+    for r in routers:
+        info(net[r].cmd("/usr/lib/frr/frrinit.sh stop '{}'".format(r)))
 
     net.stop()
 
