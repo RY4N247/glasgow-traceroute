@@ -18,11 +18,11 @@ pub struct UdpHeader {
 }
 
 impl UdpHeader {
-    /// Converts the UDP header and payload into a byte array. 
-    /// 
+    /// Converts the UDP header and payload into a byte array.
+    ///
     /// The method returns a vector of bytes representing the UDP header and payload.
     pub fn to_byte_array(&self, payload: &[u8]) -> Vec<u8> {
-        let mut buf:Vec<u8> = Vec::with_capacity(8 + payload.len());
+        let mut buf: Vec<u8> = Vec::with_capacity(8 + payload.len());
 
         buf.extend_from_slice(&self.source_port.to_be_bytes());
         buf.extend_from_slice(&self.destination_port.to_be_bytes());
@@ -35,9 +35,13 @@ impl UdpHeader {
     }
 
     /// Applies the IP context to the UDP header and payload.
-    /// 
+    ///
     /// The method calculates the checksum of the UDP header and payload and stores it in the transport bytes.
-    pub fn apply_ip_context(&self, ip_packet: &packet::ip::Packet<&[u8]>, transport_bytes: &mut [u8]) {
+    pub fn apply_ip_context(
+        &self,
+        ip_packet: &packet::ip::Packet<&[u8]>,
+        transport_bytes: &mut [u8],
+    ) {
         let checksum = packet::udp::checksum(ip_packet, transport_bytes);
         transport_bytes[6..8].copy_from_slice(&checksum.to_be_bytes());
     }
@@ -54,7 +58,7 @@ pub struct UdpHeaderBuilder {
 }
 impl UdpHeaderBuilder {
     /// Creates a new `UdpHeaderBuilder` instance.
-    /// 
+    ///
     /// The method returns a new `UdpHeaderBuilder` instance.
     pub fn new() -> Self {
         Self {
@@ -73,7 +77,7 @@ impl UdpHeaderBuilder {
         self
     }
     /// Builds the UDP header.
-    /// 
+    ///
     /// The method returns a new `UdpHeader` instance.
     pub fn build(self) -> UdpHeader {
         UdpHeader {

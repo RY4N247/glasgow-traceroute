@@ -25,21 +25,21 @@
 //! Packet construction, parsing, and algorithms live in the `glasgow_traceroute` library
 //! (`applications`, `headers`, `helpers`). This file only parses arguments and dispatches.
 
-use std::net::Ipv4Addr;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
-use std::time::{Duration};
-use std::{thread};
 use clap::Parser;
 use glasgow_traceroute::applications::mda::Mda;
 use glasgow_traceroute::applications::ping::Ping;
 use glasgow_traceroute::applications::traceroute::Traceroute;
 use glasgow_traceroute::enums::{Tool, TransportProtocol};
 use glasgow_traceroute::helpers::packet_parser;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::thread;
+use std::time::Duration;
 
 /// Parsed CLI flags and positionals for [`main`].
 ///
@@ -62,12 +62,12 @@ struct Args {
     #[arg(long)]
     port: Option<u16>,
 
-    /// After traceroute: path to a topology YAML to draw the observed path 
+    /// After traceroute: path to a topology YAML to draw the observed path
     #[arg(long)]
     topology: Option<String>,
 
-    /// MDA: probes per discovery round (default: 7).
-    #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(usize))]
+    /// MDA: probes per discovery round (default: 10).
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(usize))]
     mda_probes: usize,
 }
 
@@ -91,16 +91,19 @@ fn main() {
         Tool::Ping => {
             println!("PING {}:", args.destination);
 
-            let dest: Ipv4Addr = args
-                .destination
-                .parse()
-                .expect("Invalid IPv4 address");
+            let dest: Ipv4Addr = args.destination.parse().expect("Invalid IPv4 address");
 
             // timeout_ms, payload_size
             let timeout_ms = 1000;
             let payload_size = 36;
 
-            let mut ping = Ping::new(args.probe_type.clone(), dest, timeout_ms, payload_size, args.port);
+            let mut ping = Ping::new(
+                args.probe_type.clone(),
+                dest,
+                timeout_ms,
+                payload_size,
+                args.port,
+            );
 
             let mut packets_sent: u64 = 0;
             let mut packets_received: u64 = 0;
@@ -110,10 +113,7 @@ fn main() {
                 packets_sent += 1;
                 match ping.send_ping() {
                     Ok(res) => {
-                        let rtt_ms = res
-                            .rtt
-                            .map(|d| d.as_secs_f64() * 1000.0)
-                            .unwrap();
+                        let rtt_ms = res.rtt.map(|d| d.as_secs_f64() * 1000.0).unwrap();
 
                         if args.probe_type == TransportProtocol::Icmp {
                             // Use packet_parser helper to extract sequence number properly
@@ -123,17 +123,12 @@ fn main() {
 
                             println!(
                                 "Sent ICMP echo request, received ICMP echo reply: {} bytes from {}: icmp_seq={} time={:.3} ms",
-                                res.bytes_received,
-                                res.destination,
-                                seq,
-                                rtt_ms
+                                res.bytes_received, res.destination, seq, rtt_ms
                             );
                         } else if args.probe_type == TransportProtocol::Udp {
                             println!(
                                 "Sent UDP request, received ICMP reply: {} bytes from {}: time={:.3} ms",
-                                res.bytes_received,
-                                res.destination,
-                                rtt_ms
+                                res.bytes_received, res.destination, rtt_ms
                             );
                         }
                         packets_received += 1;
@@ -166,8 +161,12 @@ fn main() {
                 let mut sum = 0.0;
 
                 for rtt in &rtts_ms {
-                    if *rtt < min { min = *rtt; }
-                    if *rtt > max { max = *rtt; }
+                    if *rtt < min {
+                        min = *rtt;
+                    }
+                    if *rtt > max {
+                        max = *rtt;
+                    }
                     sum += rtt;
                 }
 
@@ -188,36 +187,40 @@ fn main() {
         }
 
         Tool::Traceroute => {
-            let dest: Ipv4Addr = args
-                .destination
-                .parse()
-                .expect("Invalid IPv4 address");
+            let dest: Ipv4Addr = args.destination.parse().expect("Invalid IPv4 address");
 
             let timeout_ms = 2000;
             let payload_size = 36;
             let max_ttl = 30;
 
-    
+            println!(
+                "traceroute to {} ({}), {} hops max",
+                args.destination, dest, max_ttl
+            );
 
-            println!("traceroute to {} ({}), {} hops max", args.destination, dest, max_ttl);
+            let mut traceroute = Traceroute::new(
+                args.probe_type.clone(),
+                dest,
+                timeout_ms,
+                payload_size,
+                max_ttl,
+            );
 
-
-            let mut traceroute = Traceroute::new(args.probe_type.clone(), dest, timeout_ms, payload_size, max_ttl);
-            
             // Get host IP from traceroute instance
             let host_ip = traceroute.source_address();
             let results = traceroute.trace_route();
 
             // Collect IP addresses from traceroute results
             let mut traceroute_ips: Vec<String> = Vec::new();
-            
+
             // Add host IP at the beginning
             traceroute_ips.push(host_ip.to_string());
-            
+
             for hop in &results {
                 match hop.address {
                     Some(addr) => {
-                        let rtt_str = hop.rtt
+                        let rtt_str = hop
+                            .rtt
                             .map(|d| format!("{:.3} ms", d.as_secs_f64() * 1000.0))
                             .unwrap_or_else(|| "*".to_string());
                         println!("{:2}  {}  {}", hop.ttl, addr, rtt_str);
@@ -234,24 +237,30 @@ fn main() {
                 let venv_python = PathBuf::from(root).join(".venv/bin/python3");
 
                 // Check if venv exists and has dependencies
-                let needs_setup = !venv_python.exists() || 
-                    Command::new(&venv_python)
-                        .arg("-c").arg("import yaml, networkx, phart")
+                let needs_setup = !venv_python.exists()
+                    || Command::new(&venv_python)
+                        .arg("-c")
+                        .arg("import yaml, networkx, phart")
                         .output()
                         .map(|o| !o.status.success())
                         .unwrap_or(true);
-                
+
                 if needs_setup {
                     println!("Failed to print topology: ");
                     println!("    - Python venv not found or missing dependencies.");
-                    println!("    - Please run on the host (not in mininet): src/pycall/setup_py_venv.sh");
-                    println!("    - Or run: python3 -m venv .venv && .venv/bin/pip install -r src/pycall/requirements.txt");
+                    println!(
+                        "    - Please run on the host (not in mininet): src/pycall/setup_py_venv.sh"
+                    );
+                    println!(
+                        "    - Or run: python3 -m venv .venv && .venv/bin/pip install -r src/pycall/requirements.txt"
+                    );
                     return;
                 }
 
                 // Convert IP addresses to JSON
-                let ips_json = serde_json::to_string(&traceroute_ips).unwrap_or_else(|_| "[]".to_string());
-                
+                let ips_json =
+                    serde_json::to_string(&traceroute_ips).unwrap_or_else(|_| "[]".to_string());
+
                 // Run script
                 let output = Command::new(&venv_python)
                     .arg(PathBuf::from(root).join("src/pycall/print_topology.py"))
@@ -259,12 +268,11 @@ fn main() {
                     .arg(&ips_json)
                     .output()
                     .expect("Failed to run script");
-                
+
                 print!("{}", String::from_utf8_lossy(&output.stdout));
                 if !output.stderr.is_empty() {
                     eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                 }
-                
             }
         }
 
@@ -273,16 +281,16 @@ fn main() {
                 panic!("MDA only supports UDP. Use: mda udp <destination>");
             }
 
-            let dest: Ipv4Addr = args
-                .destination
-                .parse()
-                .expect("Invalid IPv4 address");
+            let dest: Ipv4Addr = args.destination.parse().expect("Invalid IPv4 address");
 
             let timeout_ms = 2000;
             let payload_size = 36;
             let max_ttl = 30;
 
-            println!("mda traceroute to {} ({}), {} hops max (UDP)", args.destination, dest, max_ttl);
+            println!(
+                "mda traceroute to {} ({}), {} hops max (UDP)",
+                args.destination, dest, max_ttl
+            );
 
             if args.mda_probes < 1 {
                 eprintln!("--mda-probes must be at least 1");

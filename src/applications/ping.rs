@@ -43,18 +43,18 @@
 //!     }
 //! }
 //! ```
-use std::mem::MaybeUninit;
-use crate::enums::{TransportProtocol, IpProtocol};
+use crate::enums::{IpProtocol, TransportProtocol};
 use crate::headers::icmp_header::IcmpHeaderBuilder;
 use crate::headers::ipv4_header::{Ipv4Header, Ipv4HeaderBuilder};
 use crate::headers::transport_header::TransportHeader;
 use crate::headers::udp_header::UdpHeaderBuilder;
 use crate::helpers::packet_parser;
-use socket2::*;
-use std::net::{Ipv4Addr, SocketAddr};
 use local_ip_address::local_ip;
-use std::time::{Duration, Instant};
 use rand::Rng;
+use socket2::*;
+use std::mem::MaybeUninit;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::time::{Duration, Instant};
 
 /// # Ping Struct
 /// Represents a Ping operation using either ICMP or UDP transport protocols.
@@ -74,7 +74,7 @@ pub struct Ping {
     ipv4_header: Ipv4Header,
     transport_header: TransportHeader,
     transport_type: TransportProtocol,
-    udp_source_port: Option<u16>,  
+    udp_source_port: Option<u16>,
 }
 /// # PingResult Struct
 /// Represents the result of a Ping to a destination.
@@ -98,37 +98,40 @@ impl Ping {
     /// The IPv4 and transport-layer headers are constructed according to
     /// the selected [`crate::enums::TransportProtocol`], establishing the
     /// context required to send probes.
-    pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, port: Option<u16>) -> Self {
+    pub fn new(
+        transport_type: TransportProtocol,
+        destination: Ipv4Addr,
+        timeout_ms: u64,
+        payload_size: usize,
+        port: Option<u16>,
+    ) -> Self {
         let socket_protocol;
         let ip_protocol;
         let transport_header: TransportHeader;
         let udp_source_port: Option<u16>;
-        
-        match transport_type {
-           TransportProtocol::Icmp => {
-               socket_protocol = Some(Protocol::ICMPV4);
-               ip_protocol = IpProtocol::ICMP;
-               let identifier = std::process::id() as u16;
-               udp_source_port = None;
-               transport_header =
-                   TransportHeader::Icmp(IcmpHeaderBuilder::new()
-                       .identifier(identifier)
-                       .build()
-               );
 
-           }
-           TransportProtocol::Udp => {
-               socket_protocol = Some(Protocol::ICMPV4);
-               ip_protocol = crate::enums::IpProtocol::UDP;
-               let dest_port = port.unwrap_or(33434);
-               let src_port = rand::rng().random_range(49152..65535);
-               udp_source_port = Some(src_port);
-               transport_header = TransportHeader::Udp(UdpHeaderBuilder::new()
-                   .source_port(src_port)
-                   .destination_port(dest_port)
-                   .build()
-               );
-           }
+        match transport_type {
+            TransportProtocol::Icmp => {
+                socket_protocol = Some(Protocol::ICMPV4);
+                ip_protocol = IpProtocol::ICMP;
+                let identifier = std::process::id() as u16;
+                udp_source_port = None;
+                transport_header =
+                    TransportHeader::Icmp(IcmpHeaderBuilder::new().identifier(identifier).build());
+            }
+            TransportProtocol::Udp => {
+                socket_protocol = Some(Protocol::ICMPV4);
+                ip_protocol = crate::enums::IpProtocol::UDP;
+                let dest_port = port.unwrap_or(33434);
+                let src_port = rand::rng().random_range(49152..65535);
+                udp_source_port = Some(src_port);
+                transport_header = TransportHeader::Udp(
+                    UdpHeaderBuilder::new()
+                        .source_port(src_port)
+                        .destination_port(dest_port)
+                        .build(),
+                );
+            }
         }
         let user_local_ip: Ipv4Addr = match local_ip().expect("Failed to get local IP") {
             std::net::IpAddr::V4(ip) => ip,
@@ -140,9 +143,14 @@ impl Ping {
             .protocol(ip_protocol)
             .build();
 
-        let socket = Socket::new(Domain::IPV4, Type::RAW, socket_protocol).expect("Failed to create socket");
-        socket.set_header_included_v4(true).expect("Failed to set header included");
-        socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).expect("Failed to set read timeout");
+        let socket =
+            Socket::new(Domain::IPV4, Type::RAW, socket_protocol).expect("Failed to create socket");
+        socket
+            .set_header_included_v4(true)
+            .expect("Failed to set header included");
+        socket
+            .set_read_timeout(Some(Duration::from_millis(timeout_ms)))
+            .expect("Failed to set read timeout");
 
         Self {
             destination,
@@ -170,7 +178,7 @@ impl Ping {
             self.transport_header.increment_sequence_number();
         }
         let mut transport_bytes = self.transport_header.to_byte_array(&payload);
-        
+
         // Extract expected identifier and sequence number for ICMP (from bytes 4-5 and 6-7)
         let (expected_id_opt, expected_seq_opt) = match self.transport_type {
             TransportProtocol::Icmp => {
@@ -180,16 +188,19 @@ impl Ping {
             }
             _ => (None, None), // Not used for UDP
         };
-        
+
         let local_ip = self.ipv4_header.source_address;
-        
+
         // Build packet with Network byte order to create IP packet structure for checksum calculation
-        let parser_packet = self.ipv4_header.build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
+        let parser_packet = self
+            .ipv4_header
+            .build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
 
         let temp_ip_packet = packet::ip::Packet::new(parser_packet.as_slice()).unwrap();
 
-        // Apply IP context 
-        self.transport_header.apply_ip_context(&temp_ip_packet, &mut transport_bytes);
+        // Apply IP context
+        self.transport_header
+            .apply_ip_context(&temp_ip_packet, &mut transport_bytes);
 
         // Build final packet with platform-appropriate byte order for sending
         let bytes = self.ipv4_header.build_packet(&transport_bytes, None);
@@ -198,9 +209,7 @@ impl Ping {
 
         let start = Instant::now();
         // Send the packet to the destination
-        let bytes_sent = self
-            .socket
-            .send_to(&bytes, &sockaddr.into())?;
+        let bytes_sent = self.socket.send_to(&bytes, &sockaddr.into())?;
 
         // Unsafe buffer as uninitialised memory is required for the recv_from method.
         let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
@@ -210,7 +219,8 @@ impl Ping {
             // Receive a packet from the socket
             match self.socket.recv_from(&mut buf) {
                 Ok((n, _addr)) => {
-                    let packet: &[u8] = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
+                    let packet: &[u8] =
+                        unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
 
                     // Check if the packet matches using the packet_parser helper function
                     if packet_parser::packet_matches(

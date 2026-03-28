@@ -15,8 +15,8 @@ pub enum TransportHeader {
 }
 
 impl TransportHeader {
-    /// Converts the tranpsort header and payload into a byte array. 
-    /// 
+    /// Converts the tranpsort header and payload into a byte array.
+    ///
     /// The method dispatches to the appropriate header to convert the header and payload into a byte array.
     pub fn to_byte_array(&self, payload: &[u8]) -> Vec<u8> {
         match self {
@@ -24,8 +24,12 @@ impl TransportHeader {
             TransportHeader::Udp(h) => h.to_byte_array(payload),
         }
     }
-    
-    pub fn apply_ip_context(&self, ip_packet: &packet::ip::Packet<&[u8]>, transport_bytes: &mut [u8]) {
+
+    pub fn apply_ip_context(
+        &self,
+        ip_packet: &packet::ip::Packet<&[u8]>,
+        transport_bytes: &mut [u8],
+    ) {
         match self {
             // ICMP does not need to apply IP context
             TransportHeader::Icmp(_) => {}

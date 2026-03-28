@@ -76,7 +76,6 @@ impl IcmpCode {
             },
         }
     }
-
 }
 #[derive(Clone, Debug)]
 pub enum DestinationUnreachableCode {

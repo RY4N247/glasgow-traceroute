@@ -1,13 +1,12 @@
-use std::net::Ipv4Addr;
-use packet::ip::v4::checksum;
 use crate::enums::IpFlags::DontFragment;
-use crate::enums::{ByteOrderMode, IpFlags, IpProtocol};
 use crate::enums::IpProtocol::ICMP;
-
+use crate::enums::{ByteOrderMode, IpFlags, IpProtocol};
+use packet::ip::v4::checksum;
+use std::net::Ipv4Addr;
 
 #[derive(Debug)]
 pub struct Ipv4Header {
-    pub version : u8,
+    pub version: u8,
     pub internet_header_length: u8,
     pub type_of_service: u8,
     pub explicit_congestion_notification: u8,
@@ -19,7 +18,7 @@ pub struct Ipv4Header {
     pub protocol: IpProtocol,
     pub header_checksum: u16,
     pub source_address: Ipv4Addr,
-    pub destination_address:Ipv4Addr
+    pub destination_address: Ipv4Addr,
 }
 
 impl Ipv4Header {
@@ -43,7 +42,9 @@ impl Ipv4Header {
         buf.push((self.version << 4) | (self.internet_header_length & 0b00001111));
 
         //type of service 6 bits + ecn 2 bits
-        buf.push((self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011));
+        buf.push(
+            (self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011),
+        );
 
         // ip_len is in host byte order as per man ip 4
         #[cfg(target_os = "macos")]
@@ -69,7 +70,7 @@ impl Ipv4Header {
 
         buf.push(self.protocol.to_u8());
 
-        buf.extend_from_slice(&[0,0]);
+        buf.extend_from_slice(&[0, 0]);
 
         buf.extend_from_slice(&self.source_address.octets());
 
@@ -89,7 +90,9 @@ impl Ipv4Header {
 
         buf.push((self.version << 4) | (self.internet_header_length & 0b00001111));
 
-        buf.push((self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011));
+        buf.push(
+            (self.type_of_service << 2) | (self.explicit_congestion_notification & 0b00000011),
+        );
 
         buf.extend_from_slice(&self.total_length.to_be_bytes());
 
@@ -105,7 +108,7 @@ impl Ipv4Header {
 
         buf.push(self.protocol.to_u8());
 
-        buf.extend_from_slice(&[0,0]);
+        buf.extend_from_slice(&[0, 0]);
 
         buf.extend_from_slice(&self.source_address.octets());
 
@@ -113,7 +116,6 @@ impl Ipv4Header {
 
         let checksum = checksum(&buf[..20]);
 
-        
         buf[10] = (checksum >> 8) as u8;
         buf[11] = (checksum & 0xFF) as u8;
 
@@ -127,7 +129,7 @@ impl Ipv4Header {
     }
 }
 pub struct Ipv4HeaderBuilder {
-    version : u8,
+    version: u8,
     internet_header_length: u8,
     type_of_service: u8,
     explicit_congestion_notification: u8,
@@ -139,7 +141,7 @@ pub struct Ipv4HeaderBuilder {
     protocol: IpProtocol,
     header_checksum: u16,
     source_address: Ipv4Addr,
-    destination_address:Ipv4Addr
+    destination_address: Ipv4Addr,
 }
 impl Ipv4HeaderBuilder {
     pub fn new() -> Self {
@@ -155,8 +157,8 @@ impl Ipv4HeaderBuilder {
             time_to_live: 64,
             protocol: ICMP,
             header_checksum: 0,
-            source_address: Ipv4Addr::new(0,0,0,0),
-            destination_address: Ipv4Addr::new(0,0,0,0)
+            source_address: Ipv4Addr::new(0, 0, 0, 0),
+            destination_address: Ipv4Addr::new(0, 0, 0, 0),
         }
     }
 
@@ -194,8 +196,7 @@ impl Ipv4HeaderBuilder {
             protocol: self.protocol,
             header_checksum: self.header_checksum,
             source_address: self.source_address,
-            destination_address: self.destination_address
+            destination_address: self.destination_address,
         }
     }
 }
-

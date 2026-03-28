@@ -1,7 +1,6 @@
 use crate::enums::{IcmpCode, IcmpType};
 use packet::icmp::checksum;
 
-
 #[derive(Debug)]
 pub struct IcmpHeader {
     pub icmp_type: IcmpType,
@@ -89,4 +88,3 @@ impl IcmpHeaderBuilder {
         }
     }
 }
-

@@ -37,27 +37,26 @@
 //!     }
 //! }
 //! ```
-use std::mem::MaybeUninit;
-use crate::enums::{TransportProtocol, IpProtocol};
+use crate::enums::{IpProtocol, TransportProtocol};
 use crate::headers::icmp_header::IcmpHeaderBuilder;
 use crate::headers::ipv4_header::{Ipv4Header, Ipv4HeaderBuilder};
 use crate::headers::transport_header::TransportHeader;
 use crate::headers::udp_header::UdpHeaderBuilder;
 use crate::helpers::packet_parser;
-use socket2::*;
-use std::net::{Ipv4Addr, SocketAddr};
 use local_ip_address::local_ip;
+use socket2::*;
+use std::mem::MaybeUninit;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 
 // initial values for ICMP and UDP packets
-const ICMP_INITIAL_ID: u16 = 1000; 
-const UDP_INITIAL_DEST_PORT: u16 = 33434; 
+const ICMP_INITIAL_ID: u16 = 1000;
+const UDP_INITIAL_DEST_PORT: u16 = 33434;
 const UDP_INITIAL_SRC_PORT: u16 = 49152;
-
 
 /// # HopResult Struct
 /// Represents the result of a traceroute hop.
-/// 
+///
 /// # Fields
 /// - `ttl`: The time to live value of the packet.
 /// - `address`: The address of the hop.
@@ -70,7 +69,7 @@ pub struct HopResult {
 
 /// # Traceroute Struct
 /// Represents a traceroute operation.
-/// 
+///
 /// # Fields
 /// - `destination`: The target IPv4 address to traceroute.
 /// - `socket`: The raw socket used for sending and receiving packets.
@@ -89,25 +88,29 @@ pub struct Traceroute {
     max_ttl: u8,
 }
 
-impl Traceroute{
+impl Traceroute {
     /// Creates a new `Traceroute` instance.
     ///
     /// The IPv4 and transport-layer headers are constructed according to
     /// the selected [`crate::enums::TransportProtocol`], establishing the
     /// context required to send probes.
-    pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, max_ttl: u8) -> Self {
+    pub fn new(
+        transport_type: TransportProtocol,
+        destination: Ipv4Addr,
+        timeout_ms: u64,
+        payload_size: usize,
+        max_ttl: u8,
+    ) -> Self {
         let socket_protocol;
         let ip_protocol;
         let transport_header: TransportHeader;
-        
+
         match transport_type {
             TransportProtocol::Icmp => {
                 socket_protocol = Some(Protocol::ICMPV4);
                 ip_protocol = IpProtocol::ICMP;
                 transport_header = TransportHeader::Icmp(
-                    IcmpHeaderBuilder::new()
-                        .identifier(ICMP_INITIAL_ID)
-                        .build()
+                    IcmpHeaderBuilder::new().identifier(ICMP_INITIAL_ID).build(),
                 );
             }
             TransportProtocol::Udp => {
@@ -117,7 +120,7 @@ impl Traceroute{
                     UdpHeaderBuilder::new()
                         .source_port(UDP_INITIAL_SRC_PORT)
                         .destination_port(UDP_INITIAL_DEST_PORT)
-                        .build()
+                        .build(),
                 );
             }
         }
@@ -126,17 +129,21 @@ impl Traceroute{
             std::net::IpAddr::V4(ip) => ip,
             std::net::IpAddr::V6(_) => panic!("IPv6 not supported"),
         };
-        
+
         let ipv4_header = Ipv4HeaderBuilder::new()
             .source_address(user_local_ip)
             .destination_address(destination)
             .protocol(ip_protocol)
             .build();
 
-        let socket = Socket::new(Domain::IPV4, Type::RAW, socket_protocol)
-            .expect("Failed to create socket");
-        socket.set_header_included_v4(true).expect("Failed to set header included");
-        socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).expect("Failed to set read timeout");
+        let socket =
+            Socket::new(Domain::IPV4, Type::RAW, socket_protocol).expect("Failed to create socket");
+        socket
+            .set_header_included_v4(true)
+            .expect("Failed to set header included");
+        socket
+            .set_read_timeout(Some(Duration::from_millis(timeout_ms)))
+            .expect("Failed to set read timeout");
 
         Self {
             destination,
@@ -148,16 +155,16 @@ impl Traceroute{
             max_ttl,
         }
     }
-    
+
     /// Returns the source address of the traceroute instance.
     pub fn source_address(&self) -> Ipv4Addr {
         self.ipv4_header.source_address
     }
-    
+
     /// Traces the route to the destination and returns a vector of `HopResult`s.
-    /// 
+    ///
     /// The method sends probes with increasing TTL values, incrementing the transport header sequence
-    /// number for ICMP and keeping the transport header ports constant for UDP. 
+    /// number for ICMP and keeping the transport header ports constant for UDP.
     /// Returns a vector of [`HopResult`] structs containing the response details.
     pub fn trace_route(&mut self) -> Vec<HopResult> {
         let mut results: Vec<HopResult> = Vec::new();
@@ -167,47 +174,62 @@ impl Traceroute{
         for ttl in 1..=self.max_ttl {
             self.ipv4_header.time_to_live = ttl;
             self.transport_header.increment_sequence_number();
-            
+
             let transport_bytes = self.transport_header.to_byte_array(&payload);
-            
+
             // Build packet with Network byte order to create IP packet structure for checksum calculation
-            let parser_packet = self.ipv4_header.build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
+            let parser_packet = self
+                .ipv4_header
+                .build_packet(&transport_bytes, Some(crate::enums::ByteOrderMode::Network));
             let temp_ip_packet = packet::ip::Packet::new(parser_packet.as_slice()).unwrap();
-            
+
             // Apply IP context for checksum calculation
             let mut transport_bytes_mut = transport_bytes.clone();
-            self.transport_header.apply_ip_context(&temp_ip_packet, &mut transport_bytes_mut);
-            
+            self.transport_header
+                .apply_ip_context(&temp_ip_packet, &mut transport_bytes_mut);
+
             // Build final packet with platform-appropriate byte order for sending
             let packet = self.ipv4_header.build_packet(&transport_bytes_mut, None);
             let sockaddr = SocketAddr::from((self.destination, 0));
 
             let start = Instant::now();
             if self.socket.send_to(&packet, &sockaddr.into()).is_err() {
-                results.push(HopResult { ttl, address: None, rtt: None });
+                results.push(HopResult {
+                    ttl,
+                    address: None,
+                    rtt: None,
+                });
                 continue;
             }
 
             let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
-            
+
             loop {
                 match self.socket.recv_from(&mut buf) {
                     Ok((n, _)) => {
-                        let recv_packet: &[u8] = unsafe { 
-                            std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) 
-                        };
+                        let recv_packet: &[u8] =
+                            unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
                         let rtt = start.elapsed();
-                        
+
                         match self.transport_type {
                             TransportProtocol::Udp => {
                                 // Paris traceroute: ports are constant, match on fixed values.
                                 // Only one probe in flight, so first matching response is for current TTL.
-                                if let Some((src_ip, recv_src_port, recv_dst_port)) = 
-                                    packet_parser::extract_udp_ports_from_icmp_error(recv_packet, local_ip) 
+                                if let Some((src_ip, recv_src_port, recv_dst_port)) =
+                                    packet_parser::extract_udp_ports_from_icmp_error(
+                                        recv_packet,
+                                        local_ip,
+                                    )
                                 {
-                                    if recv_src_port == UDP_INITIAL_SRC_PORT && recv_dst_port == UDP_INITIAL_DEST_PORT {
-                                        results.push(HopResult { ttl, address: Some(src_ip), rtt: Some(rtt) });
-                                     
+                                    if recv_src_port == UDP_INITIAL_SRC_PORT
+                                        && recv_dst_port == UDP_INITIAL_DEST_PORT
+                                    {
+                                        results.push(HopResult {
+                                            ttl,
+                                            address: Some(src_ip),
+                                            rtt: Some(rtt),
+                                        });
+
                                         if src_ip == self.destination {
                                             return results;
                                         }
@@ -219,27 +241,40 @@ impl Traceroute{
                                 // Expected values: sequence increments, identifier decrements
                                 let expected_seq = ttl as u16;
                                 let expected_id = ICMP_INITIAL_ID.wrapping_sub(ttl as u16);
-                                
+
                                 // Check for ICMP Time Exceeded or Destination Unreachable with ICMP
-                                if let Some((src_ip, recv_id, recv_seq)) = 
-                                    packet_parser::extract_icmp_identifier_seq_from_icmp_error(recv_packet) 
+                                if let Some((src_ip, recv_id, recv_seq)) =
+                                    packet_parser::extract_icmp_identifier_seq_from_icmp_error(
+                                        recv_packet,
+                                    )
                                 {
                                     if recv_id == expected_id && recv_seq == expected_seq {
-                                        results.push(HopResult { ttl, address: Some(src_ip), rtt: Some(rtt) });
-                                     
+                                        results.push(HopResult {
+                                            ttl,
+                                            address: Some(src_ip),
+                                            rtt: Some(rtt),
+                                        });
+
                                         if src_ip == self.destination {
                                             return results;
                                         }
                                         break;
                                     }
                                 }
-                                
-                                // Check for ICMP Echo Reply 
-                                if let Some((src_ip, recv_id, recv_seq)) = 
-                                    packet_parser::extract_icmp_identifier_seq(recv_packet) 
+
+                                // Check for ICMP Echo Reply
+                                if let Some((src_ip, recv_id, recv_seq)) =
+                                    packet_parser::extract_icmp_identifier_seq(recv_packet)
                                 {
-                                    if src_ip == self.destination && recv_id == expected_id && recv_seq == expected_seq {
-                                        results.push(HopResult { ttl, address: Some(src_ip), rtt: Some(rtt) });
+                                    if src_ip == self.destination
+                                        && recv_id == expected_id
+                                        && recv_seq == expected_seq
+                                    {
+                                        results.push(HopResult {
+                                            ttl,
+                                            address: Some(src_ip),
+                                            rtt: Some(rtt),
+                                        });
                                         return results;
                                     }
                                 }
@@ -247,7 +282,11 @@ impl Traceroute{
                         }
                     }
                     Err(_) => {
-                        results.push(HopResult { ttl, address: None, rtt: None });
+                        results.push(HopResult {
+                            ttl,
+                            address: None,
+                            rtt: None,
+                        });
                         break;
                     }
                 }
@@ -255,5 +294,4 @@ impl Traceroute{
         }
         results
     }
-    
 }
