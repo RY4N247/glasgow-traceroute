@@ -1,4 +1,30 @@
-// File: `src/main.rs`
+//! # Glasgow Traceroute (binary)
+//!
+//! Command-line entry point for the Glasgow Traceroute project: **Paris traceroute**-style
+//! probing over **raw IPv4 sockets**, keeping flow-identifying fields stable so paths through
+//! load-balanced networks stay consistent.
+//!
+//! ## Tools
+//!
+//! Positional arguments are `<tool> <probe_type> <destination>` (see `--help`). [`Tool`]
+//! selects the program mode; [`TransportProtocol`] selects ICMP or UDP probes.
+//!
+//! | Mode | Behaviour |
+//! |------|-----------|
+//! | `ping` | Sends probes once per second until Ctrl-C, then prints loss and RTT stats. |
+//! | `traceroute` | Increases TTL per hop; prints each hop. Optional `--topology` runs the Python path overlay (see `src/pycall/`). |
+//! | `mda` | Multipath discovery (**UDP only**). Use `--mda-probes` to set probes per discovery round. |
+//!
+//! ## Privileges and platform
+//!
+//! Raw sockets typically require **elevated privileges** on Linux; see `run_raw.sh` in the
+//! repository root. Use WSL 2 on Windows; native Windows is not supported.
+//!
+//! ## Implementation
+//!
+//! Packet construction, parsing, and algorithms live in the `glasgow_traceroute` library
+//! (`applications`, `headers`, `helpers`). This file only parses arguments and dispatches.
+
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::process::Command;
@@ -15,31 +41,41 @@ use glasgow_traceroute::applications::traceroute::Traceroute;
 use glasgow_traceroute::enums::{Tool, TransportProtocol};
 use glasgow_traceroute::helpers::packet_parser;
 
+/// Parsed CLI flags and positionals for [`main`].
+///
+/// Field `///` comments are shown in `--help` (via `clap`).
 #[derive(Parser, Debug)]
 #[command(name = "glasgow-traceroute")]
 struct Args {
+    /// Ping, classic traceroute, or MDA multipath discovery.
     #[arg(value_enum)]
     tool: Tool,
 
+    /// ICMP echo or UDP payload probes.
     #[arg(value_enum)]
     probe_type: TransportProtocol,
 
+    /// Target host as an IPv4 address (e.g. 8.8.8.8)
     destination: String,
 
+    /// UDP destination port for `ping udp` (default: 33434, conventional traceroute port)
     #[arg(long)]
     port: Option<u16>,
 
+    /// After traceroute: path to a topology YAML to draw the observed path 
     #[arg(long)]
     topology: Option<String>,
+
+    /// MDA: probes per discovery round (default: 7).
+    #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(usize))]
+    mda_probes: usize,
 }
 
+/// Installs a Ctrl-C handler, then runs [`Ping`], [`Traceroute`], or [`Mda`] according to
+/// [`Args::tool`]. Traceroute with `--topology` may invoke `.venv/bin/python3` and
+/// `src/pycall/print_topology.py` when the venv and dependencies are present.
 fn main() {
     let args = Args::parse();
-
-    // Only require --port for Ping with UDP, not for Traceroute
-    if matches!(args.tool, Tool::Ping) && matches!(args.probe_type, TransportProtocol::Udp) && args.port.is_none() {
-        panic!("UDP ping requires --port");
-    }
 
     // Ctrl-C handler
     let running = Arc::new(AtomicBool::new(true));
@@ -248,7 +284,11 @@ fn main() {
 
             println!("mda traceroute to {} ({}), {} hops max (UDP)", args.destination, dest, max_ttl);
 
-            let mda = Mda::new(dest, timeout_ms, payload_size);
+            if args.mda_probes < 1 {
+                eprintln!("--mda-probes must be at least 1");
+                std::process::exit(1);
+            }
+            let mda = Mda::new(dest, timeout_ms, payload_size, args.mda_probes);
             let paths = mda.multipath_traceroute(1, max_ttl);
 
             for (i, path) in paths.iter().enumerate() {

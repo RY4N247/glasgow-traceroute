@@ -1,3 +1,20 @@
+//! # MDA application module
+//! Implements the MDA traceroute algorithm as described in the paper "Multipath Discovery Algorithm" using a dublin-traceroute style stopping point. 
+//! 
+//! ## Overview
+//! This module builds UDP probe packets encapsulated within IPv4 headers using the [`crate::headers`] module.
+//! 
+//! ## Design
+//! Mda results are returned via the `HopResult` struct, which exposes results
+//! in an iterable format enabling flexible client usage. The `Mda` struct
+//! encapsulates all necessary state and methods.
+//! ### Example
+//! Note: Running this example may require elevated privileges due to raw socket usage.
+//! - On `Linux` systems, please see the run_raw.sh script in the repository root for guidance.
+//! - On `macOS` systems, running sudo cargo run will suffice.
+//! - On `Windows` systems, please use WSL 2 as this crate does not currently support native Windows functionality.
+//! ```
+//!
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::mem::MaybeUninit;
 use crate::enums::{ByteOrderMode, IpProtocol};
@@ -12,35 +29,40 @@ use std::time::Duration;
 const UDP_INITIAL_DEST_PORT: u16 = 33434;
 const UDP_INITIAL_SRC_PORT: u16 = 49152;
 
-// Table II from paper: PROBESTOSEND(n, α) for 95% confidence
-// n = number of interfaces expected, value = number of probes k to send
-// ie if you have seen n interfaces at a hop send k probes so that you can be 95% confident that you have discovered all interfaces
-const STOPPING_POINTS_95: [usize; 18] = [
-//  n=0  1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
-    0, 0, 7, 11, 16, 21, 27, 33, 38, 44, 51, 57, 63, 70, 76, 83, 90, 96
-];
 
-
+/// # HopResult Struct
+/// Represents the result of a MDA hop.
+/// # Fields
+/// - `ttl`: The time to live value of the packet.
+/// - `address`: The address of the hop.
+/// - `rtt`: The round-trip time of the hop.
 pub struct HopResult {
     pub ttl: u8,
     pub address: Option<Ipv4Addr>,
     pub rtt: Option<Duration>,
 }
 
-/// A single path from source to destination (sequence of interface IPs at each hop)
-pub type Path = Vec<Ipv4Addr>;
-
+/// # Mda Struct
+/// Represents a MDA instance.
+/// # Fields
+/// - `destination`: The destination IPv4 address.
+/// - `socket`: The raw socket used for sending and receiving packets.
+/// - `ipv4_header`: The IPv4 header.
+/// - `payload_size`: The size of the payload.
+/// - `max_probes`: The maximum number of probes to send.
 pub struct Mda {
     destination: Ipv4Addr,
     socket: Socket,
     ipv4_header: Ipv4Header,
     payload_size: usize,
+    max_probes: usize,
 
 }
 
 impl Mda {
     /// Creates MDA instance. Uses UDP probes (source port = flow id) for L4 multipath hash compatibility.
-    pub fn new(destination: Ipv4Addr, timeout_ms: u64, payload_size: usize) -> Self {
+    /// 
+    pub fn new(destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, max_probes: usize) -> Self {
         let user_local_ip: Ipv4Addr = match local_ip().expect("Failed to get local IP") {
             IpAddr::V4(ip) => ip,
             IpAddr::V6(_) => panic!("IPv6 not supported"),
@@ -62,24 +84,25 @@ impl Mda {
             socket,
             ipv4_header,
             payload_size,
+            max_probes: std::cmp::max(1, max_probes),
         }
     }
 
-    // Uses table lookup to determine the number of probes to send based on the number of interfaces observes so far
-    pub fn probes_to_send(n: usize) -> usize {
-        if n < 2 { 
-            1 // Initial probes when expecting 1 interface
-        } else if n < STOPPING_POINTS_95.len() { 
-            STOPPING_POINTS_95[n] 
-        } else { 
-            STOPPING_POINTS_95[17] // any more than 17 just do the max
-        }
+    /// Returns the maximum number of probes to send.
+    fn probes_to_send(&self) -> usize {
+        self.max_probes
     }
     
-    // Hash function that returns a random integer in the range 10,000 and 65,535 given a flow identifier k
+    /// Selects a flow by returning an integer in the range 10,000 and 65,535 given a flow identifier k
     fn select_flow(k: usize) -> u16 {
         return 10000 + ((k % (65535 - 10000 + 1)) as u16)
     }
+
+    /// Sends a probe to the destination and returns the source address of the response.
+    /// 
+    /// The method sends a probe to the destination with the given TTL and flow identifier.
+    /// The method then waits for a response and returns the source address of the response.
+    /// Returns the source address of the response or None if the operation fails or times out.
     fn send_probe(&self, h: u8, phi: u16) -> Option<Ipv4Addr> {
         let payload: Vec<u8> = vec![0u8; self.payload_size];
         let local_ip = self.ipv4_header.source_address;
@@ -146,25 +169,24 @@ impl Mda {
     }
 
 
-    // Algorithm 2:
+    /// Algorithm 2 of the MDA paper
+    /// 
+    /// 
     pub fn next_hops(&self, hop: u8, flows_to_r: &Vec<u16>, is_source: bool) 
         -> (HashSet<Ipv4Addr>, HashMap<Ipv4Addr, Vec<u16>>)  // Returns (Ŝr, F_{h,s} for each s)
     {
-        println!("  Running Algorithm 2: next_hops");
-
-        
         let mut k: usize = 0;  // k ← 0
         let mut nexthop_interfaces_of_r: HashSet<Ipv4Addr> = HashSet::new();  // Ŝr ← ∅
         let mut flows_to_nexthops: HashMap<Ipv4Addr, Vec<u16>> = HashMap::new();  // F_{h,s}
         
         loop {  // repeat
             let n_guess = nexthop_interfaces_of_r.len() + 1;
-            println!("      N guess: {:?}", n_guess);
+
             // n ← |Ŝr| + 1
-            let max = Self::probes_to_send(n_guess);  // max ← PROBESTOSEND(n, α)
-            println!("      Max: {:?}", max);
+            let max = self.probes_to_send();  // fixed probe budget per discovery round
+ 
             for i in (k + 1)..=max {
-                println!("      Sending probe {}/{}", i, max);
+
                 let flow_id = if i <= flows_to_r.len() {
                     flows_to_r[i - 1]  // Reuse flow that we know reached r (paper uses 1-based k)
                 } else if is_source {
@@ -174,20 +196,18 @@ impl Mda {
                     k = i;
                     break;
                 };
-                println!("      Flow id: {:?}", flow_id);
+
                 if let Some(successor) = self.send_probe(hop, flow_id) {  
                     nexthop_interfaces_of_r.insert(successor);  // Ŝr ← Ŝr ∪ {s} // typo in paper saying Ŝr ← Ŝr ∪ {r}
                     flows_to_nexthops.entry(successor).or_default().push(flow_id);  // F_{h,s} ← F_{h,s} ∪ {φ}
                 }
-                println!("      nexthop_interfaces_of_r: {:?}", nexthop_interfaces_of_r);
-                println!("      flows_to_nexthops: {:?}", flows_to_nexthops);
-                println!("      k before update: {:?}", k);
+
                 k = i;
-                println!("      k: {:?}", k);
+
             }
                      
             if nexthop_interfaces_of_r.len() < n_guess { 
-                println!("      |Ŝr| < n_guess, stopping. |Ŝr|: {:?}, n_guess: {:?}", nexthop_interfaces_of_r.len(), n_guess); // until |Ŝr| < n
+ 
                 break;
             }
         }
@@ -197,7 +217,7 @@ impl Mda {
 
 
     // Algorithm 1: F_{h,r} and F_{h-1,r} are not initialised in the paper but are necessary to track flows interface to interface across hops
-    pub fn multipath_traceroute(&self, hmin: u8, hmax: u8) -> Vec<Path> {
+    pub fn multipath_traceroute(&self, hmin: u8, hmax: u8) -> Vec<Vec<Ipv4Addr>> {
         let mut previous_interfaces: HashSet<Ipv4Addr> = HashSet::new();
         let fake_interface = Ipv4Addr::new(0, 0, 0, 0);
         previous_interfaces.insert(fake_interface);  //Rhmin−1 ←{0}
@@ -206,10 +226,7 @@ impl Mda {
         let mut flow_to_path: HashMap<u16, Vec<Ipv4Addr>> = HashMap::new(); // F_{h,s} ← ∅
 
         for h in hmin..=hmax.saturating_add(1) {
-            println!("Hop h={}", h);
-            println!("  Previous interfaces: {:?}", previous_interfaces);
-            println!("  Flows at hop h-1: {:?}", flows_at_hop_h_minus_1);
-            println!("  Flows to path: {:?}", flow_to_path); 
+
             let mut interfaces_at_hop_h: HashSet<Ipv4Addr> = HashSet::new(); // Rh ← ∅
             let mut flows_at_hop_h: HashMap<Ipv4Addr, BTreeSet<u16>> = HashMap::new(); //F_{h,r} ← ∅
 
@@ -217,37 +234,32 @@ impl Mda {
                 // Get flows that reached r (F_{h-1,r})                     
                 let flows_to_r: Vec<u16> = flows_at_hop_h_minus_1.get(r).cloned().unwrap_or_default().into_iter().collect();
                 let is_source = *r == fake_interface;  // fake interface can generate any flow
-                println!("  Flows to r: {:?}", flows_to_r);
-                println!("  Is source: {:?}", is_source);
-                // Get next hops and flows to next hops using Algorithm 2
-                println!("  Sending probes to next hops, flows to r: {:?}, is source: {:?}, hop: {:?}", flows_to_r, is_source, h);
 
                 let (nexthop_interfaces_of_r, flows_to_nexthops) = self.next_hops(h, &flows_to_r, is_source); 
-                println!("  Nexthop interfaces of r: {:?}", nexthop_interfaces_of_r);
-                println!("  Flows to nexthops: {:?}", flows_to_nexthops);
+
                 for (s, flows) in flows_to_nexthops {
                     for f in &flows {
                         flow_to_path.entry(*f).or_default().push(s);
                     }
                     flows_at_hop_h.entry(s).or_default().extend(flows);
                 }
-                println!("  Flows at hop h: {:?}", flows_at_hop_h);
+
 
                 interfaces_at_hop_h.extend(&nexthop_interfaces_of_r);
-                println!("  Interfaces at hop h: {:?}", interfaces_at_hop_h);
+     
             }
 
             flows_at_hop_h_minus_1 = flows_at_hop_h;
             if interfaces_at_hop_h.is_empty() {
-                println!("  Interfaces at hop h are empty, stopping");
+  
                 break;
             }
             if interfaces_at_hop_h.contains(&self.destination) {
-                println!("  Interfaces at hop h contain destination, stopping");
+
                 break;
             }
             previous_interfaces = interfaces_at_hop_h;
-            println!("  Previous interfaces: {:?}", previous_interfaces);
+
         }
 
         // Keep unique paths that reach destination, flows that dont reach the destination are discarded
@@ -260,7 +272,7 @@ impl Mda {
             }
         }
         paths.sort();
-        println!("  Paths: {:?}", paths);
+
         paths
 
 

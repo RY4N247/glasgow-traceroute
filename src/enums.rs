@@ -1,9 +1,7 @@
 use clap::ValueEnum;
 
 /// ICMP Types and Codes as per RFC 792
-/// https://tools.ietf.org/html/rfc792
-/// https://www.geeksforgeeks.org/computer-networks/types-of-icmp-internet-control-message-protocol-messages/
-///
+
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Tool {
     Ping,

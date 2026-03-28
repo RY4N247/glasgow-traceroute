@@ -5,7 +5,6 @@ use crate::enums::{ByteOrderMode, IpFlags, IpProtocol};
 use crate::enums::IpProtocol::ICMP;
 
 
-/// https://networklessons.com/ip-routing/ipv4-packet-header
 #[derive(Debug)]
 pub struct Ipv4Header {
     pub version : u8,

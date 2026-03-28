@@ -20,12 +20,15 @@ def print_topology(yaml_file_path, traceroute_ips):
     for link in topo['links']:
         G.add_edge(link[0], link[1])
 
-    # Map IP addresses to node names
+    # Map IP addresses to node names (a node may have one IP or a list, e.g. router with multiple interfaces)
     ip_to_node = {}
     for node_name, node_ip in topo['nodes'].items():
-        if node_ip:
-            # Extract IP from "IP/prefix" format
-            ip = node_ip.split('/')[0]
+        if node_ip is None:
+            continue
+        items = node_ip if isinstance(node_ip, list) else [node_ip]
+        for item in items:
+            raw = item if isinstance(item, str) else str(item)
+            ip = raw.split('/')[0]
             ip_to_node[ip] = node_name
 
     # Map traceroute IPs to node names
@@ -35,47 +38,42 @@ def print_topology(yaml_file_path, traceroute_ips):
             node_name = ip_to_node[ip]
             nodes_with_ips.append(node_name)
     
-    # Find the complete path including switches
-    # If we have at least 2 nodes, find the shortest path between them
-    if len(nodes_with_ips) >= 2:
-        try:
-            # Find shortest path from first to last node
-            complete_path = nx.shortest_path(G, nodes_with_ips[0], nodes_with_ips[-1])
-            node_path = complete_path
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            # Fallback to just the nodes with IPs if path not found
-            node_path = nodes_with_ips
-    else:
-        node_path = nodes_with_ips
+    # Highlight: exact path returned by traceroute (nodes_with_ips) plus always s1 and s2 if present
+    nodes_to_highlight = list(nodes_with_ips)
+    for sw in ("s1", "s2"):
+        if sw in topo["nodes"] and sw not in nodes_to_highlight:
+            nodes_to_highlight.append(sw)
 
     print(" ")
     print(" ")
     print("===TOPOLOGY===")
     print("")
+    # Explicit path: order of nodes as seen by traceroute (IPs mapped to node names)
+    if nodes_with_ips:
+        print("Path: " + " -> ".join(nodes_with_ips))
+        print("")
     
-    # Print all nodes and their IPs, highlighting ones in the path
-    node_path_set = set(node_path)
+    def first_ip(node_ip):
+        if node_ip is None:
+            return None
+        item = node_ip[0] if isinstance(node_ip, list) else node_ip
+        raw = item if isinstance(item, str) else str(item)
+        return raw.split('/')[0]
+
+    # Print all nodes and their IPs, highlighting path + s1/s2
+    node_path_set = set(nodes_to_highlight)
     for node_name, node_ip in sorted(topo['nodes'].items()):
+        ip = first_ip(node_ip)
         if node_name in node_path_set:
-            # Highlight nodes in the path in green
-            if node_ip:
-                ip = node_ip.split('/')[0]
-                print(f"{GREEN}{node_name}{RESET}: {ip}")
-            else:
-                print(f"{GREEN}{node_name}{RESET}: null")
+            print(f"{GREEN}{node_name}{RESET}: {ip}" if ip else f"{GREEN}{node_name}{RESET}: null")
         else:
-            # Regular nodes not in path
-            if node_ip:
-                ip = node_ip.split('/')[0]
-                print(f"{node_name}: {ip}")
-            else:
-                print(f"{node_name}: null")
+            print(f"{node_name}: {ip}" if ip else f"{node_name}: null")
 
     renderer = ASCIIRenderer(G)
     ascii_graph = renderer.render()
 
-    # Highlight nodes in the traceroute path
-    for node in node_path:
+    # Highlight path + s1/s2 in diagram; replace longer names first to avoid partial matches
+    for node in sorted(nodes_to_highlight, key=len, reverse=True):
         ascii_graph = ascii_graph.replace(
             node, 
             f"{GREEN}{node}{RESET}"

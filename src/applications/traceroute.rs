@@ -57,6 +57,7 @@ const UDP_INITIAL_SRC_PORT: u16 = 49152;
 
 /// # HopResult Struct
 /// Represents the result of a traceroute hop.
+/// 
 /// # Fields
 /// - `ttl`: The time to live value of the packet.
 /// - `address`: The address of the hop.
@@ -67,11 +68,9 @@ pub struct HopResult {
     pub rtt: Option<Duration>,
 }
 
-//OUTPUT(r, πr, F{h-1,r})
-
-
 /// # Traceroute Struct
 /// Represents a traceroute operation.
+/// 
 /// # Fields
 /// - `destination`: The target IPv4 address to traceroute.
 /// - `socket`: The raw socket used for sending and receiving packets.
@@ -91,6 +90,11 @@ pub struct Traceroute {
 }
 
 impl Traceroute{
+    /// Creates a new `Traceroute` instance.
+    ///
+    /// The IPv4 and transport-layer headers are constructed according to
+    /// the selected [`crate::enums::TransportProtocol`], establishing the
+    /// context required to send probes.
     pub fn new(transport_type: TransportProtocol, destination: Ipv4Addr, timeout_ms: u64, payload_size: usize, max_ttl: u8) -> Self {
         let socket_protocol;
         let ip_protocol;
@@ -145,10 +149,16 @@ impl Traceroute{
         }
     }
     
+    /// Returns the source address of the traceroute instance.
     pub fn source_address(&self) -> Ipv4Addr {
         self.ipv4_header.source_address
     }
     
+    /// Traces the route to the destination and returns a vector of `HopResult`s.
+    /// 
+    /// The method sends probes with increasing TTL values, incrementing the transport header sequence
+    /// number for ICMP and keeping the transport header ports constant for UDP. 
+    /// Returns a vector of [`HopResult`] structs containing the response details.
     pub fn trace_route(&mut self) -> Vec<HopResult> {
         let mut results: Vec<HopResult> = Vec::new();
         let payload: Vec<u8> = vec![0u8; self.payload_size];

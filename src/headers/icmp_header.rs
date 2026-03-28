@@ -1,6 +1,6 @@
-/// https://www.geeksforgeeks.org/computer-networks/internet-control-message-protocol-icmp/
 use crate::enums::{IcmpCode, IcmpType};
 use packet::icmp::checksum;
+
 
 #[derive(Debug)]
 pub struct IcmpHeader {

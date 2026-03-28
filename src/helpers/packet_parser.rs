@@ -210,3 +210,183 @@ pub fn packet_matches(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ip_header(src_ip: Ipv4Addr) -> [u8; 20] {
+        let octets = src_ip.octets();
+        let mut h = [0u8; 20];
+        h[0] = 0x45; // version 4, IHL 5
+        h[12..16].copy_from_slice(&octets);
+        h
+    }
+
+    #[test]
+    fn extract_icmp_identifier_seq_valid() {
+        let mut packet = vec![0u8; 28];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(192, 168, 1, 1)));
+        packet[20] = IcmpType::EchoReply.to_u8();
+        packet[24..26].copy_from_slice(&1234u16.to_be_bytes());
+        packet[26..28].copy_from_slice(&5678u16.to_be_bytes());
+
+        let result = extract_icmp_identifier_seq(&packet).unwrap();
+        assert_eq!(result.0, Ipv4Addr::new(192, 168, 1, 1));
+        assert_eq!(result.1, 1234);
+        assert_eq!(result.2, 5678);
+    }
+
+    #[test]
+    fn extract_icmp_identifier_seq_too_short() {
+        assert!(extract_icmp_identifier_seq(&[0u8; 20]).is_none());
+    }
+
+    #[test]
+    fn extract_icmp_identifier_seq_wrong_type() {
+        let mut packet = vec![0u8; 28];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(192, 168, 1, 1)));
+        packet[20] = IcmpType::EchoRequest.to_u8();
+        assert!(extract_icmp_identifier_seq(&packet).is_none());
+    }
+
+    #[test]
+    fn extract_udp_source_port_from_icmp_error_valid() {
+        let mut packet = vec![0u8; 56]; // outer IP(20) + ICMP(8) + embedded IP(20) + UDP(8)
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(10, 0, 0, 1)));
+        packet[20] = IcmpType::TimeExceeded.to_u8();
+        packet[28] = 0x45; // embedded IP IHL
+        packet[37] = IpProtocol::UDP.to_u8();
+        packet[40..44].copy_from_slice(&Ipv4Addr::new(192, 168, 1, 100).octets()); // embedded src
+        packet[48..50].copy_from_slice(&33456u16.to_be_bytes()); // UDP src port at offset 48
+
+        let local = Ipv4Addr::new(192, 168, 1, 100);
+        let result = extract_udp_source_port_from_icmp_error(&packet, local).unwrap();
+        assert_eq!(result.0, Ipv4Addr::new(10, 0, 0, 1));
+        assert_eq!(result.1, 33456);
+    }
+
+    #[test]
+    fn extract_udp_source_port_from_icmp_error_wrong_local_ip() {
+        let mut packet = vec![0u8; 56];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(10, 0, 0, 1)));
+        packet[20] = IcmpType::DestinationUnreachable.to_u8();
+        packet[28] = 0x45;
+        packet[37] = IpProtocol::UDP.to_u8();
+        packet[40..44].copy_from_slice(&Ipv4Addr::new(192, 168, 1, 100).octets());
+        packet[48..50].copy_from_slice(&33456u16.to_be_bytes());
+
+        let wrong_local = Ipv4Addr::new(192, 168, 1, 99);
+        assert!(extract_udp_source_port_from_icmp_error(&packet, wrong_local).is_none());
+    }
+
+    #[test]
+    fn extract_udp_ports_from_icmp_error_valid() {
+        let mut packet = vec![0u8; 56];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(10, 0, 0, 1)));
+        packet[20] = IcmpType::TimeExceeded.to_u8();
+        packet[28] = 0x45;
+        packet[37] = IpProtocol::UDP.to_u8();
+        packet[40..44].copy_from_slice(&Ipv4Addr::new(192, 168, 1, 100).octets());
+        packet[48..50].copy_from_slice(&33456u16.to_be_bytes());
+        packet[50..52].copy_from_slice(&443u16.to_be_bytes());
+
+        let local = Ipv4Addr::new(192, 168, 1, 100);
+        let result = extract_udp_ports_from_icmp_error(&packet, local).unwrap();
+        assert_eq!(result.0, Ipv4Addr::new(10, 0, 0, 1));
+        assert_eq!(result.1, 33456);
+        assert_eq!(result.2, 443);
+    }
+
+    #[test]
+    fn extract_icmp_identifier_seq_from_icmp_error_valid() {
+        let mut packet = vec![0u8; 56];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(10, 0, 0, 1)));
+        packet[20] = IcmpType::TimeExceeded.to_u8();
+        // Embedded ICMP starts at 48; identifier at +4, sequence at +6
+        packet[52..54].copy_from_slice(&1111u16.to_be_bytes());
+        packet[54..56].copy_from_slice(&2222u16.to_be_bytes());
+
+        let result = extract_icmp_identifier_seq_from_icmp_error(&packet).unwrap();
+        assert_eq!(result.0, Ipv4Addr::new(10, 0, 0, 1));
+        assert_eq!(result.1, 1111);
+        assert_eq!(result.2, 2222);
+    }
+
+    #[test]
+    fn extract_icmp_identifier_seq_from_icmp_error_too_short() {
+        assert!(extract_icmp_identifier_seq_from_icmp_error(&[0u8; 47]).is_none());
+    }
+
+    #[test]
+    fn extract_source_ip_valid() {
+        let mut packet = vec![0u8; 20];
+        packet[12..16].copy_from_slice(&Ipv4Addr::new(1, 2, 3, 4).octets());
+        assert_eq!(extract_source_ip(&packet), Some(Ipv4Addr::new(1, 2, 3, 4)));
+    }
+
+    #[test]
+    fn extract_source_ip_too_short() {
+        assert!(extract_source_ip(&[0u8; 19]).is_none());
+    }
+
+    #[test]
+    fn packet_matches_icmp() {
+        let mut packet = vec![0u8; 28];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(192, 168, 1, 1)));
+        packet[20] = IcmpType::EchoReply.to_u8();
+        packet[24..26].copy_from_slice(&100u16.to_be_bytes());
+        packet[26..28].copy_from_slice(&200u16.to_be_bytes());
+
+        assert!(packet_matches(
+            &packet,
+            &TransportProtocol::Icmp,
+            Ipv4Addr::new(192, 168, 1, 1),
+            Some(100),
+            Some(200),
+            None,
+            Ipv4Addr::UNSPECIFIED,
+        ));
+    }
+
+    #[test]
+    fn packet_matches_icmp_wrong_identifier() {
+        let mut packet = vec![0u8; 28];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(192, 168, 1, 1)));
+        packet[20] = IcmpType::EchoReply.to_u8();
+        packet[24..26].copy_from_slice(&100u16.to_be_bytes());
+        packet[26..28].copy_from_slice(&200u16.to_be_bytes());
+
+        assert!(!packet_matches(
+            &packet,
+            &TransportProtocol::Icmp,
+            Ipv4Addr::new(192, 168, 1, 1),
+            Some(999), // wrong identifier
+            Some(200),
+            None,
+            Ipv4Addr::UNSPECIFIED,
+        ));
+    }
+
+    #[test]
+    fn packet_matches_udp() {
+        let mut packet = vec![0u8; 56];
+        packet[0..20].copy_from_slice(&ip_header(Ipv4Addr::new(10, 0, 0, 1)));
+        packet[20] = IcmpType::TimeExceeded.to_u8();
+        packet[28] = 0x45;
+        packet[37] = IpProtocol::UDP.to_u8();
+        packet[40..44].copy_from_slice(&Ipv4Addr::new(192, 168, 1, 100).octets());
+        packet[48..50].copy_from_slice(&55555u16.to_be_bytes());
+
+        let local = Ipv4Addr::new(192, 168, 1, 100);
+        assert!(packet_matches(
+            &packet,
+            &TransportProtocol::Udp,
+            Ipv4Addr::new(10, 0, 0, 1),
+            None,
+            None,
+            Some(55555),
+            local,
+        ));
+    }
+}
+
