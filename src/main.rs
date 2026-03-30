@@ -58,7 +58,7 @@ struct Args {
     /// Target host as an IPv4 address (e.g. 8.8.8.8)
     destination: String,
 
-    /// UDP destination port for `ping udp` (default: 33434, conventional traceroute port)
+    /// UDP destination port for `ping udp` (default: 33434)
     #[arg(long)]
     port: Option<u16>,
 
@@ -76,6 +76,16 @@ struct Args {
 /// `src/pycall/print_topology.py` when the venv and dependencies are present.
 fn main() {
     let args = Args::parse();
+    if args.port.is_some()
+        && !(matches!(args.tool, Tool::Ping) && matches!(args.probe_type, TransportProtocol::Udp))
+    {
+        eprintln!("--port is only supported for: ping udp <destination>");
+        std::process::exit(2);
+    }
+    if args.topology.is_some() && !matches!(args.tool, Tool::Traceroute) {
+        eprintln!("--topology is only supported for: traceroute <probe_type> <destination>");
+        std::process::exit(2);
+    }
 
     // Ctrl-C handler
     let running = Arc::new(AtomicBool::new(true));

@@ -232,6 +232,7 @@ mod tests {
         h
     }
 
+    // Verifies correct extraction of source IP, identifier and sequence from a valid Echo Reply
     #[test]
     fn extract_icmp_identifier_seq_valid() {
         let mut packet = vec![0u8; 28];
@@ -246,11 +247,13 @@ mod tests {
         assert_eq!(result.2, 5678);
     }
 
+    // Rejects packets that are too short to contain an ICMP header
     #[test]
     fn extract_icmp_identifier_seq_too_short() {
         assert!(extract_icmp_identifier_seq(&[0u8; 20]).is_none());
     }
 
+    // Rejects packets with an ICMP type other than Echo Reply
     #[test]
     fn extract_icmp_identifier_seq_wrong_type() {
         let mut packet = vec![0u8; 28];
@@ -259,6 +262,7 @@ mod tests {
         assert!(extract_icmp_identifier_seq(&packet).is_none());
     }
 
+    // Extracts the UDP source port from a valid ICMP Time Exceeded error containing our embedded probe
     #[test]
     fn extract_udp_source_port_from_icmp_error_valid() {
         let mut packet = vec![0u8; 56]; // outer IP(20) + ICMP(8) + embedded IP(20) + UDP(8)
@@ -275,6 +279,7 @@ mod tests {
         assert_eq!(result.1, 33456);
     }
 
+    // Rejects ICMP errors where the embedded source IP does not match our local address
     #[test]
     fn extract_udp_source_port_from_icmp_error_wrong_local_ip() {
         let mut packet = vec![0u8; 56];
@@ -289,6 +294,7 @@ mod tests {
         assert!(extract_udp_source_port_from_icmp_error(&packet, wrong_local).is_none());
     }
 
+    // Extracts both UDP source and destination ports from a valid ICMP error
     #[test]
     fn extract_udp_ports_from_icmp_error_valid() {
         let mut packet = vec![0u8; 56];
@@ -307,6 +313,7 @@ mod tests {
         assert_eq!(result.2, 443);
     }
 
+    // Extracts embedded ICMP identifier and sequence from a valid ICMP Time Exceeded error
     #[test]
     fn extract_icmp_identifier_seq_from_icmp_error_valid() {
         let mut packet = vec![0u8; 56];
@@ -322,11 +329,13 @@ mod tests {
         assert_eq!(result.2, 2222);
     }
 
+    // Rejects ICMP error packets that are too short to contain an embedded ICMP header
     #[test]
     fn extract_icmp_identifier_seq_from_icmp_error_too_short() {
         assert!(extract_icmp_identifier_seq_from_icmp_error(&[0u8; 47]).is_none());
     }
 
+    // Extracts the source IP address from a valid IPv4 header
     #[test]
     fn extract_source_ip_valid() {
         let mut packet = vec![0u8; 20];
@@ -334,11 +343,13 @@ mod tests {
         assert_eq!(extract_source_ip(&packet), Some(Ipv4Addr::new(1, 2, 3, 4)));
     }
 
+    // Rejects packets shorter than the minimum IPv4 header length
     #[test]
     fn extract_source_ip_too_short() {
         assert!(extract_source_ip(&[0u8; 19]).is_none());
     }
 
+    // Matches an ICMP Echo Reply with the correct source, identifier and sequence
     #[test]
     fn packet_matches_icmp() {
         let mut packet = vec![0u8; 28];
@@ -358,6 +369,7 @@ mod tests {
         ));
     }
 
+    // Rejects an ICMP Echo Reply where the identifier does not match
     #[test]
     fn packet_matches_icmp_wrong_identifier() {
         let mut packet = vec![0u8; 28];
@@ -377,6 +389,7 @@ mod tests {
         ));
     }
 
+    // Matches a UDP probe response via the embedded source port in an ICMP error
     #[test]
     fn packet_matches_udp() {
         let mut packet = vec![0u8; 56];

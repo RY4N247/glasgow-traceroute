@@ -1,22 +1,18 @@
 # Glasgow Traceroute
 
-A network traceroute tool written in Rust that implements **Paris Traceroute** functionality using raw IPv4 sockets. Paris Traceroute is a variant of traceroute where fields are kept constant to avoid anomalies in load balanced networks.
-
-## Future Work
-- Support for IPv6 [ ]
-- Support for TCP probes [ ]
-- MDA Traceroute implementation [ ]
-- Multi-threaded probing for faster results [ ]
-
-### Prerequisites
-- Rust 
-- Linux, macOS, or WSL 2 (Windows not natively supported)
-- Elevated privileges for raw socket usage
+**Glasgow Traceroute** is a Rust CLI (and library) for active IPv4 network measurement using **raw sockets**. It provides **ping**, **Paris traceroute** (keeping flow-identifying fields constant across TTL steps to avoid load-balancing artefacts), and **MDA-style** multipath discovery (varying the flow identifier to explore multiple valid paths).
 
 ### Usage and Documentation
-Run `cargo run -- --help` for usage or `cargo doc --open` for further implementation details.
+Run the following commands for usage and implementation details:
 
-**Note**: On Linux systems, see `run_raw.sh` in the repository root for guidance on setting up raw socket permissions.
+```bash
+cargo run -- --help
+cargo doc --open
+```
+
+**Note (raw sockets)**:
+- **Linux**: run `./run_raw.sh` once. It builds the project and uses `sudo setcap cap_net_raw+ep target/debug/glasgow-traceroute`.
+- **macOS**: run with `sudo` (e.g. `sudo cargo run -- <args>`).
 
 ## Documentation
 
@@ -31,15 +27,11 @@ This project includes several guides to help you get started:
 ### 3. [ASCII Topology Visualization](./src/pycall/README.md)
    Set up the optional Python environment to visualize traceroute paths as ASCII art on your network topology diagrams.
 
-## How It Works
+## Tests
 
-Glasgow Traceroute implements Paris Traceroute by:
-- Keeping probe packet fields constant (source port, destination port, etc.) across TTL increments
-- Using raw sockets to construct and send custom IPv4 packets
-- Parsing ICMP error messages to identify intermediate hops
-- Maintaining state to match responses to sent probes
-
-This approach ensures that probes follow the same path through load-balanced networks, providing accurate route discovery.
+```bash
+cargo test
+```
 
 ## Author
 

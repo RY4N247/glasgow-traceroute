@@ -1,7 +1,5 @@
 use clap::ValueEnum;
 
-/// ICMP Types and Codes as per RFC 792
-
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Tool {
     Ping,
@@ -104,7 +102,7 @@ pub enum ParameterProblemCode {
     MissingRequiredOption = 1,
     BadLength = 2,
 }
-// IP Enumerations
+
 #[derive(Debug)]
 pub enum IpProtocol {
     ICMP = 1,
@@ -141,7 +139,6 @@ pub enum ByteOrderMode {
     Auto,
 }
 
-/// Transport/Probe Protocol (ICMP is not technically transport layer but included for probing)
 #[derive(ValueEnum, Clone, Debug, Eq, PartialEq)]
 pub enum TransportProtocol {
     Icmp,
