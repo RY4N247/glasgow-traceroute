@@ -1,6 +1,6 @@
 # Load Balanced Network Example
 ## Instructions:
-1. Ensure multipass is installed on your system. For instructions see https://canonical.com/multipass/install 
+1. Ensure multipass is installed on your system. For instructions see https://canonical.com/multipass/install. Note: Windows is not currently supported, including when using Multipass.  
 2. Once multipass is installed, run `bash run_vm.sh` from within `glasgow-traceroute/example` to create the virtual machine. 
 
 ```bash

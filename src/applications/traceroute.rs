@@ -14,7 +14,7 @@
 //! Note: Running this example may require elevated privileges due to raw socket usage.
 //! - On `Linux` systems, please see the run_raw.sh script in the repository root for guidance.
 //! - On `macOS` systems, running sudo cargo run will suffice.
-//! - On `Windows` systems, please use WSL 2 as this crate does not currently support native Windows functionality.
+//! - WINDOWS IS NOT SUPPORTED EVEN VIA MULTIPASS
 //! ```no_run
 //! use std::net::Ipv4Addr;
 //! use glasgow_traceroute::applications::traceroute::Traceroute;
