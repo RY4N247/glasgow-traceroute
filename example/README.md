@@ -66,3 +66,8 @@ traceroute to 10.6.0.251 (10.6.0.251), 30 hops max
  5  10.6.0.251  0.785 ms
 ```
 
+Only one Mininet instance (`load_balanced_network_a`, `load_balanced_network_b`, or `load_balanced_network_c`) can run at a time. Exit cleanly from each before starting another:
+
+```bash
+mininet> exit
+```
