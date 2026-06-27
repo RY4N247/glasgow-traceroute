@@ -2,6 +2,12 @@
 
 **Glasgow Traceroute** is a Rust CLI (and library) for active IPv4 network measurement using **raw sockets**. It provides **ping**, **Paris traceroute** (keeping flow-identifying fields constant across TTL steps to avoid load-balancing artefacts), and **MDA-style** multipath discovery (varying the flow identifier to explore multiple valid paths).
 
+## Dissertation
+
+For full design details, implementation discussion, and evaluation, read the full dissertation:
+
+[Read the full dissertation](./Ryan_Bramwell_Glasgow_Traceroute.pdf)
+
 ### Usage and Documentation
 Run the following commands for usage and implementation details:
 
@@ -21,7 +27,7 @@ This project includes several guides to help you get started:
 ### 1. [Load Balanced Network Example](./example/README.md)
    **Start here** - Complete guide to setting up and running the load balanced network example using Mininet and FRR. This demonstrates Paris Traceroute's ability to trace paths through networks with multiple equal-cost paths.
 
-### 2. [Custom Topologies](./example/load_balanced_network/README.md)
+### 2. [Custom Topologies](./example/load_balanced_network_a/README.md)
    Learn how to create your own network topologies for testing and experimentation with glasgow-traceroute.
 
 ### 3. [ASCII Topology Visualization](./src/pycall/README.md)
